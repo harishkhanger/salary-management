@@ -74,6 +74,7 @@ erDiagram
         varchar reason
         enum status "PENDING | APPROVED | REJECTED"
         datetime resolved_at "nullable"
+        datetime created_at
     }
     CURRENCY_RATES {
         varchar code PK
@@ -140,6 +141,8 @@ Rarer filter combinations on the audit feed ride the `created_at` index and scan
 ## Notes
 
 - Money columns: `DECIMAL(15,2)`; FX rates: `DECIMAL(12,6)`. Never floats.
+- Enum-valued columns ship as `VARCHAR` + `CHECK` constraints (not MySQL `ENUM`) so the identical Flyway migration runs on both MySQL and the H2 test slice; the invariant is the same.
+- All `DATETIME` values are UTC: the JDBC layer is pinned with `hibernate.jdbc.time_zone: UTC`, and application code stamps timestamps in UTC. Keyset cursors and the seeded history rely on this single convention.
 - **Rate convention:** `usd_rate` = units of local currency per 1 USD (e.g., 90.00 INR/USD). USD values are derived at read time as `amount / usd_rate` — from the row's own snapshot for history, from current `currency_rates` for projections. The snapshot is captured by copying the live rate into the credit row at insert; credits never join back to `currency_rates`.
 - `audit_log.changed_fields` is JSON (`old → new` per field) for profile edits; **salary events store no amounts here** — they are thin references (`ref_table`, `ref_id`) to the owning row. Complete trail, zero duplication.
 - `run_id` on `audit_log` is the collapse key: the global UI groups bulk-generated rows under one header sourced from the run tables.

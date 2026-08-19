@@ -1,0 +1,57 @@
+# Salary Management System — build context
+
+Take-home assessment (Incubyte). Read `docs/REQUIREMENTS.md` first — it is the scope contract. Nothing gets built beyond it.
+
+## Working rules (non-negotiable)
+
+1. **Build → Harish reviews → only then commit.** Never commit or push without explicit approval.
+2. Incremental commits with meaningful messages — the history must tell the story of the build.
+3. TDD rhythm where practical: failing test → implementation → refactor.
+4. Scope is frozen by REQUIREMENTS.md. New ideas go to a "Future work" note, not into code.
+5. Ask before assuming on anything ambiguous.
+
+## Stack
+
+- **Backend:** `backend/` — Spring Boot 4 (4.1.x parent; test annotations live in new per-module packages, e.g. `org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest`), Java 21, Maven. MySQL 8.4 (local via `docker-compose up -d`, host port **3307** to dodge the native mysqld on 3306), Flyway migrations (`ddl-auto: validate` — Hibernate never touches schema), `open-in-view: false`, Lombok.
+- **Frontend (to build):** `frontend/` — React + Vite + one component library (MUI or Ant Design), dev proxy to backend `:8080`. Built after backend API stabilizes.
+- **Tests:** Mockito-first for service-layer logic (fast, deterministic). Thin `@DataJpaTest` slice on test-scoped H2 covering ONLY database contracts: the payroll idempotency unique constraint, keyset pagination queries, analytics aggregates.
+
+## Design decisions (with the why — these are interview-defended)
+
+- **Append-only compensation history.** Every salary change is a `SalaryChange` row (old → new, type, actor, timestamp). Corrections/reverts are new compensating entries. History is never edited or deleted.
+- **Immutable payroll credits.** Processing creates `SalaryCredit` rows snapshotting amount, currency, and USD rate *at credit time*. Rate changes never touch history. Credits are facts; only decisions (changes) get reversed.
+- **Idempotent payroll runs** via unique constraint `(employee_id, year, month)` — the DB is the referee; double-processing is structurally impossible. Process-one and process-all share one code path.
+- **Salary hold** = employee status (ACTIVE/ON_HOLD); processing skips held employees. Holds block payout, not compensation changes.
+- **Bulk raises: per-item transactions**, not all-or-nothing — partial progress + review beats blocking a cohort for one bad record. Implemented with the per-item work in a SEPARATE bean (`REQUIRES_NEW`) because self-invocation would bypass the transaction proxy — structure exists BECAUSE of proxy semantics; keep it that way.
+- **Raise guardrail:** any change pushing trailing-12-month cumulative raise above a configurable threshold (OrgSettings, default 30%) is parked in a review queue (`RaiseReviewItem`), not auto-applied. Guardrail feeders: cumulative rule, band-less by design.
+- **Bulk raise preview** (dry-run of the same code path): affected count, cost impact, recently-raised employees flagged for optional exclusion. Excluded = simply omitted, never queued.
+- **Optimistic locking** (`@Version` on Employee) — bulk and individual operations can't silently overwrite each other.
+- **Soft-delete employees** — payroll history must survive removal.
+- **Audit ledger:** ONE centralized append-only `audit_log` table. Captured via `@TransactionalEventListener(AFTER_COMMIT)` (documented trade-off: crash window vs business-txn decoupling; outbox pattern is the production path). Thin reference events for salary changes/credits (no amounts duplicated — pointer to the owning row). Bulk-generated rows carry `run_id`; global UI collapses runs into headers (data from run tables), expand = same paginated query filtered by run_id. Per-employee view = same table filtered by entity.
+- **Keyset pagination** for the audit feed (`WHERE (created_at, id) < cursor ORDER BY ... LIMIT n`) — constant-time at any depth. NOT offset. Indexes: `(entity_id, created_at)`, `(created_at, id)`, `(run_id)`.
+- **Seed script:** 10,000 employees across ~10 countries/currencies with realistic distributions, PLUS ~12 months of simulated history (payroll runs, scattered edits/raises) → 300k+ audit rows so the keyset/collapse story is demonstrable.
+- **Currency rates:** ~10 currencies, manually managed rates-to-USD (Settings page). Editing affects future credits/analytics only.
+- **Auth:** minimal session-based login, one seeded HR user, everything else behind it. No roles.
+- **Analytics:** SQL aggregates (GROUP BY) in the DB — never load 10k rows into memory. USD-normalized via current rates.
+
+## Package layout (layer-based, per Harish)
+
+`com.acme.salary.{entities, enums, repository, service, controller, dto, config, ...}` — group by layer, not by feature. Entities in `entities/`, enums in `enums/`; add each layer folder when the first class of that layer appears.
+
+## In-code patterns (only these two are deliberate; add others only if the problem earns them)
+
+- **Strategy** — raise types: `RaiseCalculation` interface, `PercentageRaise` / `FlatAmountRaise` implementations.
+- **Validator pipeline** (pragmatic chain-of-responsibility) — guardrail as an ordered list of `RaiseValidator`s (amount sanity → cumulative-threshold → ...), each returning apply / park-for-review. Extensible where the domain actually extends.
+- Do NOT introduce CQRS, sagas, event sourcing, or service decomposition — single-service monolith by design; docs stay lean (only what's built).
+- Schema reference: `docs/DATABASE-DESIGN.md` (committed) — includes the usd_rate snapshot convention (local-per-USD, copied at insert, derived at read).
+
+## Deliverables checklist (assessment requirements)
+
+- [ ] Backend API complete per requirements
+- [ ] React UI: login, employee directory, employee detail (profile / change history / credit history / activity panels), bulk raise + preview + review queue, payroll processing, settings (currencies + guardrail threshold), global audit feed (collapse-by-run), analytics dashboard
+- [ ] Seed script (10k employees + 12 months history)
+- [ ] Tests: Mockito suite + @DataJpaTest slice
+- [ ] Deployed, publicly reachable
+- [ ] Demo video
+- [ ] README: run instructions, design decisions, trade-offs, AI-usage section, future work
+- [ ] Incremental commit history throughout
