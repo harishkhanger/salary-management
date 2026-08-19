@@ -11,7 +11,10 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.math.BigDecimal;
@@ -21,6 +24,9 @@ import java.time.LocalDate;
 @Table(name = "employees")
 @Getter
 @Setter
+@Builder(toBuilder = true)
+@NoArgsConstructor
+@AllArgsConstructor
 public class Employee {
 
     @Id
@@ -50,12 +56,14 @@ public class Employee {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)
+    @Builder.Default
     private EmployeeStatus status = EmployeeStatus.ACTIVE;
 
     @Column(name = "joined_on", nullable = false)
     private LocalDate joinedOn;
 
     @Column(nullable = false)
+    @Builder.Default
     private boolean deleted = false;
 
     @Version
