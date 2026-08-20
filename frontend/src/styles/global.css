@@ -922,27 +922,37 @@ a:hover {
 }
 
 .donut {
-  width: 190px;
-  height: 190px;
+  /* scales with the card: grows when the user enlarges it, shrinks down
+     to a readable minimum — the resize handle now controls chart size */
+  width: clamp(150px, 40cqi, 380px);
+  aspect-ratio: 1 / 1;
+  height: auto;
   border-radius: 50%;
   position: relative;
-  flex-shrink: 0;
+  flex: 0 1 auto;
+}
+
+.donut-wrap {
+  align-items: center;
 }
 
 .donut::after {
   content: attr(data-center);
   position: absolute;
-  inset: 22%;
+  inset: 25%;
   background: var(--surface);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 700;
-  font-size: 15px;
+  font-weight: 650;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  color: var(--text);
   text-align: center;
   white-space: pre-line;
-  line-height: 1.3;
+  line-height: 1.45;
+  padding: 8px;
 }
 
 .legend {
@@ -1006,8 +1016,40 @@ a:hover {
   transition: height 0.5s ease;
 }
 
-.col-bar:hover {
-  filter: brightness(1.12);
+.col:hover .col-bar {
+  filter: brightness(1.18);
+}
+
+.col[data-tip] {
+  position: relative;
+  cursor: default;
+  border-radius: 6px;
+}
+
+.col[data-tip]:hover {
+  background: rgba(79, 109, 245, 0.07);
+}
+
+.col[data-tip]::before {
+  content: attr(data-tip);
+  position: absolute;
+  top: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1c2740;
+  color: white;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s;
+  z-index: 5;
+}
+
+.col[data-tip]:hover::before {
+  opacity: 1;
 }
 
 .col-count {
@@ -1020,10 +1062,18 @@ a:hover {
   font-size: 10.5px;
   color: var(--text-muted);
   white-space: nowrap;
+  /* right edge anchored exactly at the column center, then rotated about
+     that corner — the label's END points at its own column (ha='right') */
+  position: absolute;
+  right: 50%;
+  top: 8px;
   transform: rotate(-38deg);
-  transform-origin: top center;
-  margin-top: 8px;
-  height: 30px;
+  transform-origin: 100% 0;
+}
+
+.col-label-row .col {
+  height: 88px;
+  position: relative;
 }
 
 .filters-bar {
@@ -1074,4 +1124,77 @@ a:hover {
 .band-option.active {
   background: var(--accent);
   color: white;
+}
+
+/* ---------- dashboard v3: resizable chart rows ---------- */
+
+.chart-row {
+  display: flex;
+  gap: 16px;
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+
+.chart-row .card {
+  /* explicit width, NOT flex-grow: the native resize handle sets width
+     directly, and flex-grow would override it (the v3 resize bug) */
+  flex: 0 0 auto;
+  width: calc(50% - 8px);
+  min-width: 320px;
+  max-width: 100%;
+}
+
+.resizable {
+  resize: horizontal;
+  overflow: auto;
+}
+
+.resizable-both {
+  resize: both;
+  overflow: auto;
+  /* size container so the donut can scale off the card width (cqi units) */
+  container-type: inline-size;
+}
+
+.donut-scroll {
+  overflow: auto;
+}
+
+@media (max-width: 900px) {
+  .chart-row .card {
+    width: 100%;
+  }
+}
+
+/* full-width distribution scrolls horizontally at fine band widths --
+   every band stays visible, nothing is merged away. overflow-y is locked:
+   the label row is sized to fit, and the horizontal scrollbar must never
+   force a vertical one */
+.col-chart-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 4px;
+}
+
+.col-chart-inner {
+  min-width: 100%;
+}
+
+/* subtle corner affordance so the resize handle is discoverable */
+.resizable {
+  position: relative;
+}
+
+.resizable::after,
+.resizable-both::after {
+  content: '';
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid #c3c9d6;
+  border-bottom: 2px solid #c3c9d6;
+  border-radius: 0 0 3px 0;
+  pointer-events: none;
 }
