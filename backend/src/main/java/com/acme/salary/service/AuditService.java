@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.LinkedHashMap;
@@ -47,9 +48,11 @@ public class AuditService {
 
     @Transactional(readOnly = true)
     public AuditFeedResponse feed(String cursor, int limit, String entityType, Long entityId,
-                                  Long runId, String runType) {
+                                  Long runId, String runType, String action, String actor,
+                                  LocalDate from, LocalDate to) {
         int pageSize = paginationProperties.clampSize(limit);
-        Specification<AuditLog> spec = filterSpec(entityType, entityId, runId, runType);
+        Specification<AuditLog> spec = filterSpec(entityType, entityId, runId, runType)
+                .and(refinementSpec(action, actor, from, to));
         if (cursor != null && !cursor.isBlank()) {
             spec = spec.and(keysetAfter(decodeCursor(cursor)));
         }
@@ -75,6 +78,9 @@ public class AuditService {
      */
     private Specification<AuditLog> filterSpec(String entityType, Long entityId,
                                                Long runId, String runType) {
+        if (entityType != null) {
+            requireOneOf(entityType, AuditEntityType.values(), "entityType");
+        }
         if (entityType != null && entityId != null) {
             return (root, q, cb) -> cb.and(
                     cb.equal(root.get("entityType"), entityType),
@@ -94,9 +100,52 @@ public class AuditService {
             }
             return spec;
         }
-        return (root, q, cb) -> cb.or(
+        Specification<AuditLog> collapsed = (root, q, cb) -> cb.or(
                 cb.isNull(root.get("runId")),
                 cb.equal(root.get("action"), AuditAction.RUN_COMPLETED.name()));
+        if (entityType != null) {
+            // entityType without entityId narrows the global (collapsed) feed
+            collapsed = collapsed.and((root, q, cb) ->
+                    cb.equal(root.get("entityType"), entityType));
+        }
+        return collapsed;
+    }
+
+    /**
+     * User-facing feed filters; conjunctive, so they compose with any base view
+     * and with the keyset cursor unchanged. Dates are inclusive whole days.
+     */
+    private Specification<AuditLog> refinementSpec(String action, String actor,
+                                                   LocalDate from, LocalDate to) {
+        Specification<AuditLog> spec = (root, q, cb) -> cb.conjunction();
+        if (action != null) {
+            requireOneOf(action, AuditAction.values(), "action");
+            spec = spec.and((root, q, cb) -> cb.equal(root.get("action"), action));
+        }
+        if (actor != null && !actor.isBlank()) {
+            spec = spec.and((root, q, cb) -> cb.equal(root.get("actor"), actor));
+        }
+        if (from != null && to != null && to.isBefore(from)) {
+            throw new ValidationException("'to' date " + to + " is before 'from' date " + from);
+        }
+        if (from != null) {
+            spec = spec.and((root, q, cb) ->
+                    cb.greaterThanOrEqualTo(root.get("createdAt"), from.atStartOfDay()));
+        }
+        if (to != null) {
+            spec = spec.and((root, q, cb) ->
+                    cb.lessThan(root.get("createdAt"), to.plusDays(1).atStartOfDay()));
+        }
+        return spec;
+    }
+
+    private void requireOneOf(String value, Enum<?>[] allowed, String param) {
+        for (Enum<?> candidate : allowed) {
+            if (candidate.name().equals(value)) {
+                return;
+            }
+        }
+        throw new ValidationException("Unknown " + param + " '" + value + "'");
     }
 
     private Specification<AuditLog> keysetAfter(Cursor cursor) {

@@ -131,7 +131,7 @@ skipped and counted. Month rule: past months always; current month only from day
 
 | Method & path | Request | Response `data` |
 |---|---|---|
-| ✅ `GET /api/audit` | `?cursor&limit&entityType&entityId&runId&runType` | `{items:[AuditEntry\|RunHeader], nextCursor}` |
+| ✅ `GET /api/audit` | `?cursor&limit&entityType&entityId&runId&runType&action&actor&from&to` | `{items:[AuditEntry\|RunHeader], nextCursor}` |
 
 Keyset-paginated (`(createdAt, id)` cursor, opaque Base64). Approach (b): run
 headers ARE audit rows — jobs emit one RUN_COMPLETED row; the global view is one
@@ -146,6 +146,10 @@ references; amounts live in the referenced rows. Actions: CREATED, PROFILE_UPDAT
 STATUS_CHANGED, DELETED, SALARY_CHANGED, RAISE_PARKED, RAISE_APPROVED,
 RAISE_REJECTED, SALARY_CREDITED, RUN_COMPLETED, RATE_UPDATED, THRESHOLD_UPDATED.
 Currencies have no numeric id: entityId 0, code inside changed_fields.
+Feed filters (global view): `action` and `entityType` (alone — validated against
+the enums, else 400 VALIDATION), `actor` (exact match), `from`/`to` (ISO dates,
+inclusive whole days; `to` before `from` = 400 VALIDATION). Conjunctive, so they
+compose with the keyset cursor unchanged; run-item rows stay collapsed.
 
 ## 9. Analytics ✅
 

@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import tools.jackson.databind.ObjectMapper;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -64,7 +65,7 @@ class AuditKeysetDbContractTest {
         int pages = 0;
 
         do {
-            AuditFeedResponse page = auditService.feed(cursor, 7, null, null, null, null);
+            AuditFeedResponse page = auditService.feed(cursor, 7, null, null, null, null, null, null, null, null);
             page.items().forEach(item -> {
                 assertThat(seen.add(item.id())).as("duplicate id %s", item.id()).isTrue();
                 timestamps.add(item.createdAt());
@@ -87,11 +88,39 @@ class AuditKeysetDbContractTest {
         Set<Long> seen = new LinkedHashSet<>();
         String cursor = null;
         do {
-            AuditFeedResponse page = auditService.feed(cursor, 2, null, null, null, null);
+            AuditFeedResponse page = auditService.feed(cursor, 2, null, null, null, null, null, null, null, null);
             page.items().forEach(item -> assertThat(seen.add(item.id())).isTrue());
             cursor = page.nextCursor();
         } while (cursor != null);
 
+        assertThat(seen).hasSize(30);
+    }
+
+    @Test
+    void filtersComposeWithKeysetPagination() {
+        // rows outside the filter: different action, actor, and day
+        auditLogRepository.save(AuditLog.builder()
+                .entityType("EMPLOYEE").entityId(99L)
+                .action("STATUS_CHANGED").actor("hr").createdAt(BASE).build());
+        auditLogRepository.save(AuditLog.builder()
+                .entityType("EMPLOYEE").entityId(98L)
+                .action("PROFILE_UPDATED").actor("system").createdAt(BASE).build());
+        auditLogRepository.save(AuditLog.builder()
+                .entityType("EMPLOYEE").entityId(97L)
+                .action("PROFILE_UPDATED").actor("hr")
+                .createdAt(BASE.minusDays(5)).build());
+
+        Set<Long> seen = new LinkedHashSet<>();
+        String cursor = null;
+        do {
+            AuditFeedResponse page = auditService.feed(cursor, 7, null, null, null, null,
+                    "PROFILE_UPDATED", "hr", BASE.toLocalDate(), BASE.toLocalDate());
+            page.items().forEach(item -> assertThat(item.action()).isEqualTo("PROFILE_UPDATED"));
+            page.items().forEach(item -> assertThat(seen.add(item.id())).isTrue());
+            cursor = page.nextCursor();
+        } while (cursor != null);
+
+        // only the original 30 match action+actor+day; the 3 decoys are excluded
         assertThat(seen).hasSize(30);
     }
 }

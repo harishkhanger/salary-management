@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { get } from '../api/client'
 import type { AuditFeed, AuditFeedItem } from '../api/types'
@@ -10,27 +10,66 @@ import { Spinner, formatDateTime } from '../components/ui'
  * header row (approach b — headers are audit rows) that expands inline to
  * its item rows via the same endpoint filtered by runId + runType.
  */
+const ACTIONS = [
+  'CREATED',
+  'PROFILE_UPDATED',
+  'STATUS_CHANGED',
+  'DELETED',
+  'SALARY_CHANGED',
+  'RAISE_PARKED',
+  'RAISE_APPROVED',
+  'RAISE_REJECTED',
+  'SALARY_CREDITED',
+  'RUN_COMPLETED',
+  'RATE_UPDATED',
+  'THRESHOLD_UPDATED',
+]
+
+const ENTITY_TYPES = ['EMPLOYEE', 'PAYROLL_RUN', 'BULK_RAISE_RUN', 'CURRENCY', 'SETTINGS']
+
 export default function AuditFeedPage() {
   const toast = useToast()
   const [items, setItems] = useState<AuditFeedItem[]>([])
   const [cursor, setCursor] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [initialised, setInitialised] = useState(false)
+  const [action, setAction] = useState('')
+  const [entityType, setEntityType] = useState('')
+  const [actor, setActor] = useState('')
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
+  const requestSeq = useRef(0)
+
+  const hasFilters = Boolean(action || entityType || actor || from || to)
 
   const loadPage = useCallback(
     (after: string | null) => {
+      const seq = ++requestSeq.current
       setLoading(true)
-      get<AuditFeed>('/audit', { limit: 25, cursor: after ?? undefined })
+      get<AuditFeed>('/audit', {
+        limit: 25,
+        cursor: after ?? undefined,
+        action: action || undefined,
+        entityType: entityType || undefined,
+        actor: actor || undefined,
+        from: from || undefined,
+        to: to || undefined,
+      })
         .then((feed) => {
+          if (seq !== requestSeq.current) return
           setItems((prev) => (after ? [...prev, ...feed.items] : feed.items))
           setCursor(feed.nextCursor)
           setInitialised(true)
         })
-        .catch((e) => toast.error(e.message))
-        .finally(() => setLoading(false))
+        .catch((e) => {
+          if (seq === requestSeq.current) toast.error(e.message)
+        })
+        .finally(() => {
+          if (seq === requestSeq.current) setLoading(false)
+        })
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    [action, entityType, actor, from, to],
   )
 
   useEffect(() => loadPage(null), [loadPage])
@@ -44,13 +83,66 @@ export default function AuditFeedPage() {
             Every change in the system, newest first — bulk runs collapse into a single row
           </div>
         </div>
+        <div className="filters-bar">
+          <select className="select" value={action} onChange={(e) => setAction(e.target.value)}>
+            <option value="">All actions</option>
+            {ACTIONS.map((a) => (
+              <option key={a} value={a}>
+                {a.replaceAll('_', ' ')}
+              </option>
+            ))}
+          </select>
+          <select className="select" value={entityType} onChange={(e) => setEntityType(e.target.value)}>
+            <option value="">All entities</option>
+            {ENTITY_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {t.replaceAll('_', ' ')}
+              </option>
+            ))}
+          </select>
+          <select className="select" value={actor} onChange={(e) => setActor(e.target.value)}>
+            <option value="">All actors</option>
+            <option value="hr">hr</option>
+            <option value="system">system</option>
+          </select>
+          <input
+            className="input"
+            type="date"
+            value={from}
+            max={to || undefined}
+            onChange={(e) => setFrom(e.target.value)}
+            title="From date"
+          />
+          <input
+            className="input"
+            type="date"
+            value={to}
+            min={from || undefined}
+            onChange={(e) => setTo(e.target.value)}
+            title="To date"
+          />
+          {hasFilters && (
+            <button
+              className="btn btn-sm"
+              onClick={() => {
+                setAction('')
+                setEntityType('')
+                setActor('')
+                setFrom('')
+                setTo('')
+              }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="card">
         {!initialised ? (
           <Spinner />
         ) : items.length === 0 ? (
-          <div className="table-empty">No activity yet</div>
+          <div className="table-empty">{hasFilters ? 'No entries match these filters' : 'No activity yet'}</div>
         ) : (
           items.map((item) =>
             item.kind === 'RUN' ? <RunRow key={`run-${item.id}`} item={item} /> : <EntryRow key={item.id} item={item} />,
