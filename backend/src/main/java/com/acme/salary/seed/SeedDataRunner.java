@@ -13,6 +13,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -119,7 +120,7 @@ public class SeedDataRunner implements CommandLineRunner {
         initCounters();
         seedCurrencies();
 
-        YearMonth firstMonth = YearMonth.now().minusMonths(MONTHS);
+        YearMonth firstMonth = YearMonth.now(ZoneOffset.UTC).minusMonths(MONTHS);
         Map<String, BigDecimal[]> monthlyRates = driftRates(firstMonth);
         long[] payrollRunIds = insertPayrollRuns(firstMonth);
         int[] payrollCounts = new int[MONTHS];
@@ -161,7 +162,7 @@ public class SeedDataRunner implements CommandLineRunner {
                     INSERT INTO currency_rates (code, name, usd_rate, updated_at)
                     VALUES (?, ?, ?, ?)
                     ON DUPLICATE KEY UPDATE usd_rate = VALUES(usd_rate)
-                    """, c[0], c[1], new BigDecimal((String) c[2]), LocalDateTime.now());
+                    """, c[0], c[1], new BigDecimal((String) c[2]), utcNow());
         }
     }
 
@@ -242,7 +243,7 @@ public class SeedDataRunner implements CommandLineRunner {
         String email = (firstName + "." + lastName + "." + id + "@acme-corp.com").toLowerCase();
         String code = "EMP-%05d".formatted(id);
 
-        LocalDate joined = LocalDate.now().minusDays(90 + random.nextInt(365 * 7));
+        LocalDate joined = LocalDate.now(ZoneOffset.UTC).minusDays(90 + random.nextInt(365 * 7));
         boolean deleted = random.nextInt(100) < 2;
         boolean onHold = !deleted && random.nextInt(100) < 1;
 
@@ -335,11 +336,11 @@ public class SeedDataRunner implements CommandLineRunner {
         if (onHold) {
             audit("EMPLOYEE", id, "STATUS_CHANGED", ACTOR,
                     "{\"status\":{\"old\":\"ACTIVE\",\"new\":\"ON_HOLD\"}}", null, null, null,
-                    LocalDateTime.now().minusDays(random.nextInt(20)));
+                    utcNow().minusDays(random.nextInt(20)));
         }
         if (deleted) {
             audit("EMPLOYEE", id, "DELETED", ACTOR, null, null, null, null,
-                    LocalDateTime.now().minusDays(random.nextInt(30)));
+                    utcNow().minusDays(random.nextInt(30)));
         }
 
         employeeRows.add(new Object[]{id, code, name, email, country[0], department[0], currency,
@@ -428,6 +429,15 @@ public class SeedDataRunner implements CommandLineRunner {
             if (c[0].equals(currency)) return (String) c[2];
         }
         throw new IllegalStateException("Unknown currency " + currency);
+    }
+
+    /**
+     * The containers (MySQL, backend) run on UTC; a seed run from a host JVM in
+     * another zone must not write its local wall clock, or "recent" rows land in
+     * the DB's future and pin the top of the created_at-ordered audit feed.
+     */
+    private static LocalDateTime utcNow() {
+        return LocalDateTime.now(ZoneOffset.UTC);
     }
 
     /** Payroll runs happen on the 25th of each month at 06:00 UTC. */
