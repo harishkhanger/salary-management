@@ -1,7 +1,8 @@
-package com.acme.salary.service;
+package com.acme.salary.scheduler;
 
+import com.acme.salary.service.BulkRaiseService;
 import com.acme.salary.entities.BulkRaiseRun;
-import com.acme.salary.enums.BulkRaiseStatus;
+import com.acme.salary.enums.JobStatus;
 import com.acme.salary.repository.BulkRaiseRunRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,7 +29,7 @@ public class BulkRaiseRunPoller {
     @Scheduled(fixedDelayString = "${app.bulk-raise.poll-interval-ms}")
     public void pickUpPendingRuns() {
         List<BulkRaiseRun> pending = bulkRaiseRunRepository.findByStatusInOrderByIdAsc(
-                List.of(BulkRaiseStatus.QUEUED, BulkRaiseStatus.RUNNING));
+                List.of(JobStatus.QUEUED, JobStatus.RUNNING));
         for (BulkRaiseRun run : pending) {
             log.info("Picking up bulk raise run {} ({})", run.getId(), run.getStatus());
             bulkRaiseService.processRun(run);

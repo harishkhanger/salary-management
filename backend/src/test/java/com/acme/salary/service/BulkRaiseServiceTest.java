@@ -1,17 +1,18 @@
 package com.acme.salary.service;
 
 import com.acme.salary.config.BulkRaiseProperties;
+import com.acme.salary.config.JobProperties;
 import com.acme.salary.config.PaginationProperties;
-import com.acme.salary.dto.BulkRaiseExecuteRequest;
-import com.acme.salary.dto.BulkRaisePreviewRequest;
-import com.acme.salary.dto.BulkRaisePreviewResponse;
-import com.acme.salary.dto.BulkRaiseRunResponse;
+import com.acme.salary.dto.request.BulkRaiseExecuteRequest;
+import com.acme.salary.dto.request.BulkRaisePreviewRequest;
+import com.acme.salary.dto.response.BulkRaisePreviewResponse;
+import com.acme.salary.dto.response.BulkRaiseRunResponse;
 import com.acme.salary.dto.CurrencyCohortAggregate;
-import com.acme.salary.dto.RecentlyRaisedEmployee;
-import com.acme.salary.dto.SalaryChangeOutcome;
+import com.acme.salary.dto.response.RecentlyRaisedEmployee;
+import com.acme.salary.dto.response.SalaryChangeOutcome;
 import com.acme.salary.entities.BulkRaiseRun;
 import com.acme.salary.entities.CurrencyRate;
-import com.acme.salary.enums.BulkRaiseStatus;
+import com.acme.salary.enums.JobStatus;
 import com.acme.salary.enums.RaiseType;
 import com.acme.salary.repository.BulkRaiseRunRepository;
 import com.acme.salary.repository.CurrencyRateRepository;
@@ -69,8 +70,8 @@ class BulkRaiseServiceTest {
     void setUp() {
         service = new BulkRaiseService(employeeRepository, salaryChangeRepository,
                 raiseReviewItemRepository, currencyRateRepository, bulkRaiseRunRepository,
-                itemProcessor, new BulkRaiseProperties(90), new PaginationProperties(100),
-                new ObjectMapper(), FIXED);
+                itemProcessor, new BulkRaiseProperties(90), new JobProperties(100),
+                new PaginationProperties(100), new ObjectMapper(), FIXED);
     }
 
     private CurrencyRate rate(String code, String usdRate) {
@@ -94,7 +95,7 @@ class BulkRaiseServiceTest {
         return BulkRaiseRun.builder()
                 .id(9L).raiseType(RaiseType.PERCENT).raiseValue(new BigDecimal("5"))
                 .filterCountry("India").excludedIds(excludedIdsJson)
-                .initiatedBy("hr").status(BulkRaiseStatus.QUEUED)
+                .initiatedBy("hr").status(JobStatus.QUEUED)
                 .createdAt(LocalDateTime.now(FIXED))
                 .build();
     }
@@ -150,7 +151,7 @@ class BulkRaiseServiceTest {
                 RaiseType.PERCENT, new BigDecimal("5"), "India", null, List.of(2L)), "hr");
 
         assertThat(response.id()).isEqualTo(9L);
-        assertThat(response.status()).isEqualTo(BulkRaiseStatus.QUEUED);
+        assertThat(response.status()).isEqualTo(JobStatus.QUEUED);
         assertThat(response.initiatedBy()).isEqualTo("hr");
         verify(itemProcessor, never()).process(any(), any(), any(), any(), any());
         verify(employeeRepository, never()).findCohortIds(any(), any());
@@ -174,7 +175,7 @@ class BulkRaiseServiceTest {
 
         service.processRun(run);
 
-        assertThat(run.getStatus()).isEqualTo(BulkRaiseStatus.COMPLETED);
+        assertThat(run.getStatus()).isEqualTo(JobStatus.COMPLETED);
         assertThat(run.getAppliedCount()).isEqualTo(2);
         assertThat(run.getReviewCount()).isEqualTo(1);
         assertThat(run.getExcludedCount()).isEqualTo(1);
@@ -185,7 +186,7 @@ class BulkRaiseServiceTest {
     void processRunResumesAfterCrashSkippingLedgerProcessedEmployees() {
         stubRunSave();
         BulkRaiseRun run = queuedRun(null);
-        run.setStatus(BulkRaiseStatus.RUNNING); // crashed mid-run
+        run.setStatus(JobStatus.RUNNING); // crashed mid-run
         when(employeeRepository.findCohortIds("India", null)).thenReturn(List.of(1L, 2L, 3L, 4L));
         // ledger says: 1 already applied, 2 already parked before the crash
         when(salaryChangeRepository.findEmployeeIdsByRun(9L)).thenReturn(List.of(1L));
@@ -200,7 +201,7 @@ class BulkRaiseServiceTest {
         // 1 and 2 never reprocessed; counts include pre-crash work
         verify(itemProcessor, never()).process(eq(1L), any(), any(), any(), any());
         verify(itemProcessor, never()).process(eq(2L), any(), any(), any(), any());
-        assertThat(run.getStatus()).isEqualTo(BulkRaiseStatus.COMPLETED);
+        assertThat(run.getStatus()).isEqualTo(JobStatus.COMPLETED);
         assertThat(run.getAppliedCount()).isEqualTo(3);
         assertThat(run.getReviewCount()).isEqualTo(1);
     }
@@ -222,7 +223,7 @@ class BulkRaiseServiceTest {
 
         service.processRun(run);
 
-        assertThat(run.getStatus()).isEqualTo(BulkRaiseStatus.COMPLETED);
+        assertThat(run.getStatus()).isEqualTo(JobStatus.COMPLETED);
         assertThat(run.getAppliedCount()).isEqualTo(2);
         assertThat(run.getReviewCount()).isEqualTo(0);
     }

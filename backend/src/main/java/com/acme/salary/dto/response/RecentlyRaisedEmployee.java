@@ -1,4 +1,4 @@
-package com.acme.salary.dto;
+package com.acme.salary.dto.response;
 
 import java.time.LocalDateTime;
 

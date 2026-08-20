@@ -1,8 +1,8 @@
 package com.acme.salary.controller;
 
-import com.acme.salary.dto.PageResponse;
-import com.acme.salary.dto.ReviewItemResponse;
-import com.acme.salary.dto.SalaryChangeOutcome;
+import com.acme.salary.dto.response.PageResponse;
+import com.acme.salary.dto.response.ReviewItemResponse;
+import com.acme.salary.dto.response.SalaryChangeOutcome;
 import com.acme.salary.enums.ReviewStatus;
 import com.acme.salary.service.ReviewQueueService;
 import lombok.RequiredArgsConstructor;

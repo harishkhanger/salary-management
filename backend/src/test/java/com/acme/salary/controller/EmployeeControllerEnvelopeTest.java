@@ -1,6 +1,6 @@
 package com.acme.salary.controller;
 
-import com.acme.salary.dto.EmployeeResponse;
+import com.acme.salary.dto.response.EmployeeResponse;
 import com.acme.salary.enums.EmployeeStatus;
 import com.acme.salary.exception.ConflictException;
 import com.acme.salary.exception.NotFoundException;

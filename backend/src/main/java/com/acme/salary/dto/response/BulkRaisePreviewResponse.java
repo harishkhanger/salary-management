@@ -1,4 +1,4 @@
-package com.acme.salary.dto;
+package com.acme.salary.dto.response;
 
 import java.math.BigDecimal;
 import java.util.List;

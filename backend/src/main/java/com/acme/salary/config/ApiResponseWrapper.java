@@ -1,6 +1,6 @@
 package com.acme.salary.config;
 
-import com.acme.salary.dto.ApiResponse;
+import com.acme.salary.dto.response.ApiResponse;
 import org.springframework.core.MethodParameter;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.HttpMessageConverter;

@@ -1,19 +1,20 @@
 package com.acme.salary.service;
 
 import com.acme.salary.config.BulkRaiseProperties;
+import com.acme.salary.config.JobProperties;
 import com.acme.salary.config.PaginationProperties;
-import com.acme.salary.dto.BulkRaiseExecuteRequest;
-import com.acme.salary.dto.BulkRaisePreviewRequest;
-import com.acme.salary.dto.BulkRaisePreviewResponse;
-import com.acme.salary.dto.BulkRaisePreviewResponse.CostImpactEntry;
-import com.acme.salary.dto.BulkRaiseRunResponse;
+import com.acme.salary.dto.request.BulkRaiseExecuteRequest;
+import com.acme.salary.dto.request.BulkRaisePreviewRequest;
+import com.acme.salary.dto.response.BulkRaisePreviewResponse;
+import com.acme.salary.dto.response.BulkRaisePreviewResponse.CostImpactEntry;
+import com.acme.salary.dto.response.BulkRaiseRunResponse;
 import com.acme.salary.dto.CurrencyCohortAggregate;
-import com.acme.salary.dto.PageResponse;
-import com.acme.salary.dto.RecentlyRaisedEmployee;
-import com.acme.salary.dto.SalaryChangeOutcome;
+import com.acme.salary.dto.response.PageResponse;
+import com.acme.salary.dto.response.RecentlyRaisedEmployee;
+import com.acme.salary.dto.response.SalaryChangeOutcome;
 import com.acme.salary.entities.BulkRaiseRun;
 import com.acme.salary.entities.CurrencyRate;
-import com.acme.salary.enums.BulkRaiseStatus;
+import com.acme.salary.enums.JobStatus;
 import com.acme.salary.enums.ChangeType;
 import com.acme.salary.enums.RaiseType;
 import com.acme.salary.exception.NotFoundException;
@@ -56,8 +57,6 @@ import java.util.stream.Collectors;
 public class BulkRaiseService {
 
     private static final BigDecimal HUNDRED = new BigDecimal("100");
-    /** Refresh the run row's counts every N items so polling clients see progress. */
-    private static final int PROGRESS_UPDATE_EVERY = 100;
 
     private final EmployeeRepository employeeRepository;
     private final SalaryChangeRepository salaryChangeRepository;
@@ -66,6 +65,7 @@ public class BulkRaiseService {
     private final BulkRaiseRunRepository bulkRaiseRunRepository;
     private final BulkRaiseItemProcessor itemProcessor;
     private final BulkRaiseProperties properties;
+    private final JobProperties jobProperties;
     private final PaginationProperties paginationProperties;
     private final ObjectMapper objectMapper;
     private final Clock clock;
@@ -111,7 +111,7 @@ public class BulkRaiseService {
                 .filterDepartment(blankToNull(request.filterDepartment()))
                 .excludedIds(toJson(request.excludedEmployeeIdsOrEmpty()))
                 .initiatedBy(actor)
-                .status(BulkRaiseStatus.QUEUED)
+                .status(JobStatus.QUEUED)
                 .createdAt(LocalDateTime.now(clock))
                 .build());
         return BulkRaiseRunResponse.from(run);
@@ -123,7 +123,7 @@ public class BulkRaiseService {
      * the progress record, so re-entry after a crash never double-applies.
      */
     public void processRun(BulkRaiseRun run) {
-        run.setStatus(BulkRaiseStatus.RUNNING);
+        run.setStatus(JobStatus.RUNNING);
         bulkRaiseRunRepository.save(run);
 
         List<Long> cohortIds = employeeRepository.findCohortIds(
@@ -155,14 +155,14 @@ public class BulkRaiseService {
                 log.warn("Bulk raise run {} item failed for employee {}: {}",
                         run.getId(), employeeId, e.getMessage());
             }
-            if (++sinceProgressUpdate >= PROGRESS_UPDATE_EVERY) {
+            if (++sinceProgressUpdate >= jobProperties.progressUpdateEvery()) {
                 updateCounts(run, applied, parked, excludedCount);
                 sinceProgressUpdate = 0;
             }
         }
 
         updateCounts(run, applied, parked, excludedCount);
-        run.setStatus(BulkRaiseStatus.COMPLETED);
+        run.setStatus(JobStatus.COMPLETED);
         bulkRaiseRunRepository.save(run);
         log.info("Bulk raise run {} completed: applied={}, review={}, excluded={}",
                 run.getId(), applied, parked, excludedCount);

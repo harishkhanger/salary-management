@@ -1,6 +1,6 @@
 package com.acme.salary.repository;
 
-import com.acme.salary.dto.RecentlyRaisedEmployee;
+import com.acme.salary.dto.response.RecentlyRaisedEmployee;
 import com.acme.salary.entities.SalaryChange;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -43,7 +43,7 @@ public interface SalaryChangeRepository extends JpaRepository<SalaryChange, Long
      * inside the recently-raised window, flagged for optional exclusion.
      */
     @Query("""
-            SELECT new com.acme.salary.dto.RecentlyRaisedEmployee(
+            SELECT new com.acme.salary.dto.response.RecentlyRaisedEmployee(
                 e.id, e.employeeCode, e.name, MAX(c.createdAt))
             FROM SalaryChange c JOIN Employee e ON e.id = c.employeeId
             WHERE e.deleted = false

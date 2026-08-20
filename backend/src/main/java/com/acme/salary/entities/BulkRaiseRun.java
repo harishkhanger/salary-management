@@ -1,6 +1,6 @@
 package com.acme.salary.entities;
 
-import com.acme.salary.enums.BulkRaiseStatus;
+import com.acme.salary.enums.JobStatus;
 import com.acme.salary.enums.RaiseType;
 
 import jakarta.persistence.Column;
@@ -58,7 +58,7 @@ public class BulkRaiseRun {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)
     @Builder.Default
-    private BulkRaiseStatus status = BulkRaiseStatus.QUEUED;
+    private JobStatus status = JobStatus.QUEUED;
 
     /** JSON array of employee ids excluded from the run; persisted so a crashed run resumes correctly. */
     @Column(name = "excluded_ids", columnDefinition = "json")

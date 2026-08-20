@@ -1,11 +1,11 @@
 package com.acme.salary.service;
 
 import com.acme.salary.config.PaginationProperties;
-import com.acme.salary.dto.EmployeeResponse;
-import com.acme.salary.dto.PageResponse;
-import com.acme.salary.dto.ReviewItemResponse;
-import com.acme.salary.dto.SalaryChangeOutcome;
-import com.acme.salary.dto.SalaryChangeResponse;
+import com.acme.salary.dto.response.EmployeeResponse;
+import com.acme.salary.dto.response.PageResponse;
+import com.acme.salary.dto.response.ReviewItemResponse;
+import com.acme.salary.dto.response.SalaryChangeOutcome;
+import com.acme.salary.dto.response.SalaryChangeResponse;
 import com.acme.salary.entities.Employee;
 import com.acme.salary.entities.RaiseReviewItem;
 import com.acme.salary.entities.SalaryChange;

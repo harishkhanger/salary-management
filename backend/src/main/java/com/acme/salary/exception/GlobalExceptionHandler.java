@@ -1,6 +1,6 @@
 package com.acme.salary.exception;
 
-import com.acme.salary.dto.ApiResponse;
+import com.acme.salary.dto.response.ApiResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
@@ -30,6 +30,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiResponse.fail("CONCURRENT_MODIFICATION",
                         "The record was modified by another operation; reload and retry"));
+    }
+
+    @ExceptionHandler(ValidationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleBusinessValidation(ValidationException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.fail("VALIDATION", ex.getMessage()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

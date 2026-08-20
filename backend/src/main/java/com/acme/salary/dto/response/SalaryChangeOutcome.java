@@ -1,4 +1,4 @@
-package com.acme.salary.dto;
+package com.acme.salary.dto.response;
 
 /**
  * A change request has two legitimate outcomes, both 200: APPLIED (salary

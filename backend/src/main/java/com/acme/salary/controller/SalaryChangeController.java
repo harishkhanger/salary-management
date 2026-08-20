@@ -1,9 +1,9 @@
 package com.acme.salary.controller;
 
-import com.acme.salary.dto.PageResponse;
-import com.acme.salary.dto.SalaryChangeOutcome;
-import com.acme.salary.dto.SalaryChangeRequest;
-import com.acme.salary.dto.SalaryChangeResponse;
+import com.acme.salary.dto.response.PageResponse;
+import com.acme.salary.dto.response.SalaryChangeOutcome;
+import com.acme.salary.dto.request.SalaryChangeRequest;
+import com.acme.salary.dto.response.SalaryChangeResponse;
 import com.acme.salary.service.SalaryChangeService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

@@ -1,6 +1,6 @@
 package com.acme.salary.enums;
 
-public enum BulkRaiseStatus {
+public enum JobStatus {
     QUEUED,
     RUNNING,
     COMPLETED

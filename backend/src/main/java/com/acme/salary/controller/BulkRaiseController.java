@@ -1,10 +1,10 @@
 package com.acme.salary.controller;
 
-import com.acme.salary.dto.BulkRaiseExecuteRequest;
-import com.acme.salary.dto.BulkRaisePreviewRequest;
-import com.acme.salary.dto.BulkRaisePreviewResponse;
-import com.acme.salary.dto.BulkRaiseRunResponse;
-import com.acme.salary.dto.PageResponse;
+import com.acme.salary.dto.request.BulkRaiseExecuteRequest;
+import com.acme.salary.dto.request.BulkRaisePreviewRequest;
+import com.acme.salary.dto.response.BulkRaisePreviewResponse;
+import com.acme.salary.dto.response.BulkRaiseRunResponse;
+import com.acme.salary.dto.response.PageResponse;
 import com.acme.salary.service.BulkRaiseService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

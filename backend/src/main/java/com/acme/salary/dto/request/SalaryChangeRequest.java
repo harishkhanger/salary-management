@@ -1,4 +1,4 @@
-package com.acme.salary.dto;
+package com.acme.salary.dto.request;
 
 import com.acme.salary.enums.ChangeType;
 import jakarta.validation.constraints.DecimalMin;

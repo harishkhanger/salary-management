@@ -1,4 +1,4 @@
-package com.acme.salary.dto;
+package com.acme.salary.dto.request;
 
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;

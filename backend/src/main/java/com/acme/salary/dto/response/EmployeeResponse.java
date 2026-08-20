@@ -1,4 +1,4 @@
-package com.acme.salary.dto;
+package com.acme.salary.dto.response;
 
 import com.acme.salary.entities.Employee;
 import com.acme.salary.enums.EmployeeStatus;

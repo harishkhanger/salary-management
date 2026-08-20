@@ -18,8 +18,13 @@ spring:
     enabled: true
 
 app:
+  jobs:
+    progress-update-every: 100
   pagination:
     max-page-size: 100
   bulk-raise:
     recently-raised-days: 90
+    poll-interval-ms: 2000
+  payroll:
+    current-month-processable-from-day: 25
     poll-interval-ms: 2000

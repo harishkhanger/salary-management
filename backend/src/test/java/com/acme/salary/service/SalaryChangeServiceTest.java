@@ -1,8 +1,8 @@
 package com.acme.salary.service;
 
 import com.acme.salary.config.PaginationProperties;
-import com.acme.salary.dto.SalaryChangeOutcome;
-import com.acme.salary.dto.SalaryChangeRequest;
+import com.acme.salary.dto.response.SalaryChangeOutcome;
+import com.acme.salary.dto.request.SalaryChangeRequest;
 import com.acme.salary.entities.Employee;
 import com.acme.salary.entities.RaiseReviewItem;
 import com.acme.salary.entities.SalaryChange;

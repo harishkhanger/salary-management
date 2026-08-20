@@ -1,10 +1,10 @@
 package com.acme.salary.service;
 
 import com.acme.salary.config.PaginationProperties;
-import com.acme.salary.dto.EmployeeCreateRequest;
-import com.acme.salary.dto.EmployeeResponse;
-import com.acme.salary.dto.EmployeeUpdateRequest;
-import com.acme.salary.dto.PageResponse;
+import com.acme.salary.dto.request.EmployeeCreateRequest;
+import com.acme.salary.dto.response.EmployeeResponse;
+import com.acme.salary.dto.request.EmployeeUpdateRequest;
+import com.acme.salary.dto.response.PageResponse;
 import com.acme.salary.entities.Employee;
 import com.acme.salary.enums.EmployeeStatus;
 import com.acme.salary.exception.ConflictException;

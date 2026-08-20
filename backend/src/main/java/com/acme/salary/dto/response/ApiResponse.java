@@ -1,4 +1,4 @@
-package com.acme.salary.dto;
+package com.acme.salary.dto.response;
 
 /**
  * Uniform envelope for every /api response. Controllers return plain DTOs;

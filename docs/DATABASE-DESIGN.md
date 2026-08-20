@@ -52,6 +52,8 @@ erDiagram
         int skipped_held_count
         int already_processed_count
         varchar initiated_by
+        enum status "QUEUED | RUNNING | COMPLETED - job state"
+        bigint employee_id FK "null = whole org"
         datetime created_at
     }
     BULK_RAISE_RUNS {

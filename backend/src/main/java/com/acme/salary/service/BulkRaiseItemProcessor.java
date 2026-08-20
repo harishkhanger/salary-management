@@ -1,6 +1,6 @@
 package com.acme.salary.service;
 
-import com.acme.salary.dto.SalaryChangeOutcome;
+import com.acme.salary.dto.response.SalaryChangeOutcome;
 import com.acme.salary.entities.Employee;
 import com.acme.salary.enums.ChangeType;
 import com.acme.salary.exception.NotFoundException;

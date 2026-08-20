@@ -20,7 +20,7 @@ Take-home assessment (Incubyte). Read `docs/REQUIREMENTS.md` first — it is the
 
 - **Append-only compensation history.** Every salary change is a `SalaryChange` row (old → new, type, actor, timestamp). Corrections/reverts are new compensating entries. History is never edited or deleted.
 - **Immutable payroll credits.** Processing creates `SalaryCredit` rows snapshotting amount, currency, and USD rate *at credit time*. Rate changes never touch history. Credits are facts; only decisions (changes) get reversed.
-- **Idempotent payroll runs** via unique constraint `(employee_id, year, month)` — the DB is the referee; double-processing is structurally impossible. Process-one and process-all share one code path.
+- **Idempotent payroll runs** via unique constraint `(employee_id, year, month)` — the DB is the referee; double-processing is structurally impossible. Process-one and process-all share one code path. Idempotency style: check-then-insert (skip-set queried upfront, counted as alreadyProcessed; constraint guards races). Payroll is the same durable-job idiom as bulk raises (V3: status + employee_id on payroll_runs; resume derives from salary_credits). Per-credit REQUIRES_NEW transactions (money = smallest blast radius, per Harish). Month rule (per Harish): past months always processable; current month only from day 25 (app.payroll.current-month-processable-from-day); future never.
 - **Salary hold** = employee status (ACTIVE/ON_HOLD); processing skips held employees. Holds block payout, not compensation changes.
 - **Bulk raises: per-item transactions**, not all-or-nothing — partial progress + review beats blocking a cohort for one bad record. Implemented with the per-item work in a SEPARATE bean (`REQUIRES_NEW`) because self-invocation would bypass the transaction proxy — structure exists BECAUSE of proxy semantics; keep it that way.
 - **Bulk raise execution = durable background job (outbox-style, per Harish).** POST returns 202 instantly; the run row IS the job record (status QUEUED/RUNNING/COMPLETED, excluded_ids + initiated_by persisted). A single-threaded @Scheduled poller picks up QUEUED and crashed-RUNNING runs. Resume state is DERIVED from the append-only ledger (salary_changes/raise_review_items tagged with run_id) — no item table, crash never double-applies. Counts refresh every 100 items for progress polling.
@@ -41,7 +41,7 @@ Every `/api/**` response is wrapped in `ApiResponse<T>`: success → `{success:t
 
 ## Package layout (layer-based, per Harish)
 
-`com.acme.salary.{entities, enums, repository, service, controller, dto, config, ...}` — group by layer, not by feature. Entities in `entities/`, enums in `enums/`; add each layer folder when the first class of that layer appears. Pattern implementations get named subpackages under service: `service/strategy/` (RaiseCalculation + impls), `service/validation/` (RaiseValidator pipeline + RaiseContext); test packages mirror main.
+`com.acme.salary.{entities, enums, repository, service, controller, dto/{request, response}, config, scheduler, ...}` — group by layer, not by feature. Entities in `entities/`, enums in `enums/`; add each layer folder when the first class of that layer appears. Pattern implementations get named subpackages under service: `service/strategy/` (RaiseCalculation + impls), `service/validation/` (RaiseValidator pipeline + RaiseContext); test packages mirror main.
 
 ## In-code patterns & LLD standards (per Harish)
 

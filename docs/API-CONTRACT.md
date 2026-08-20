@@ -98,19 +98,24 @@ Excluded employees are simply omitted, never queued (persisted for resume).
 proposedNew, reason, status, createdAt, resolvedAt}`.
 Approving applies `proposedNew` as a salary change attributed to the approver.
 
-## 6. Payroll ⬜
+## 6. Payroll ✅
 
 | Method & path | Request | Response `data` |
 |---|---|---|
-| ⬜ `POST /api/payroll/runs` | `{year, month, employeeId?}` (omit employeeId = whole org) | `PayrollRun` = `{id, year, month, processedCount, skippedHeldCount, alreadyProcessedCount, initiatedBy, createdAt}` |
-| ⬜ `GET /api/payroll/runs` | `?page&size` | offset page of `PayrollRun` |
-| ⬜ `GET /api/employees/{id}/credits` | `?page&size` | offset page of `SalaryCredit` |
+| ✅ `POST /api/payroll/runs` | `{year, month, employeeId?}` (omit employeeId = whole org) | **202** `PayrollRun` (status QUEUED) — durable job, poll for progress |
+| ✅ `GET /api/payroll/runs/{id}` | – | `PayrollRun` (live counts while RUNNING) |
+| ✅ `GET /api/payroll/runs` | `?page&size` | offset page of `PayrollRun` |
+| ✅ `GET /api/employees/{id}/credits` | `?page&size` | offset page of `SalaryCredit` |
 
-`SalaryCredit` = `{id, employeeId, year, month, amount, currencyCode, usdRate,
-payrollRunId, createdAt}` — immutable snapshot; `usdRate` is the rate at credit time.
-Idempotent: re-running a month counts already-credited employees in
-`alreadyProcessedCount`, never double-pays (DB unique constraint is the referee).
-Held employees are skipped and counted.
+`PayrollRun` = `{id, year, month, status: QUEUED|RUNNING|COMPLETED, employeeId,
+processedCount, skippedHeldCount, alreadyProcessedCount, initiatedBy, createdAt}`.
+`SalaryCredit` = `{id, employeeId, year, month, amount (annual/12), currencyCode,
+usdRate, payrollRunId, createdAt}` — immutable snapshot; `usdRate` is the rate at
+credit time. Durable job like bulk raises; idempotency is check-then-insert with
+the DB unique key as referee — re-runs count `alreadyProcessedCount`, never
+double-pay; crash resume derives from the credits themselves. Held employees are
+skipped and counted. Month rule: past months always; current month only from day
+25 (configurable); future months rejected (VALIDATION).
 
 ## 7. Currencies & settings ⬜
 
@@ -158,7 +163,7 @@ via current rates.
 | Employee hold/release | ⬜ |
 | Bulk raises + preview | ✅ |
 | Review queue approve/reject | ✅ |
-| Payroll runs + credits | ⬜ |
+| Payroll runs + credits | ✅ |
 | Currencies & settings | ⬜ |
 | Audit feed (keyset + run collapse) | ⬜ |
 | Analytics | ⬜ |

@@ -1,7 +1,7 @@
-package com.acme.salary.dto;
+package com.acme.salary.dto.response;
 
 import com.acme.salary.entities.BulkRaiseRun;
-import com.acme.salary.enums.BulkRaiseStatus;
+import com.acme.salary.enums.JobStatus;
 import com.acme.salary.enums.RaiseType;
 
 import java.math.BigDecimal;
@@ -13,7 +13,7 @@ public record BulkRaiseRunResponse(
         BigDecimal raiseValue,
         String filterCountry,
         String filterDepartment,
-        BulkRaiseStatus status,
+        JobStatus status,
         int appliedCount,
         int reviewCount,
         int excludedCount,

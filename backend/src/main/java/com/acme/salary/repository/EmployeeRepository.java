@@ -41,4 +41,8 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, JpaSp
             """)
     List<CurrencyCohortAggregate> aggregateCohortByCurrency(@Param("country") String country,
                                                             @Param("department") String department);
+
+    /** Payroll: held employees are skipped from processing (holds block payout). */
+    @Query("SELECT e.id FROM Employee e WHERE e.deleted = false AND e.status = com.acme.salary.enums.EmployeeStatus.ON_HOLD")
+    List<Long> findHeldEmployeeIds();
 }
