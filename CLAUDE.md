@@ -40,9 +40,11 @@ Every `/api/**` response is wrapped in `ApiResponse<T>`: success → `{success:t
 
 ## Package layout (layer-based, per Harish)
 
-`com.acme.salary.{entities, enums, repository, service, controller, dto, config, ...}` — group by layer, not by feature. Entities in `entities/`, enums in `enums/`; add each layer folder when the first class of that layer appears.
+`com.acme.salary.{entities, enums, repository, service, controller, dto, config, ...}` — group by layer, not by feature. Entities in `entities/`, enums in `enums/`; add each layer folder when the first class of that layer appears. Pattern implementations get named subpackages under service: `service/strategy/` (RaiseCalculation + impls), `service/validation/` (RaiseValidator pipeline + RaiseContext); test packages mirror main.
 
-## In-code patterns (only these two are deliberate; add others only if the problem earns them)
+## In-code patterns & LLD standards (per Harish)
+
+SOLID and clean LLD everywhere, always: constructor injection only, single-responsibility classes, program to interfaces where multiple implementations exist or are foreseeable, no magic numbers (config properties or named constants), builders over telescoping setters, intention-revealing names (@Query over long derived method names), immutable DTOs (records). Named GoF patterns whenever they fit naturally — never forced where a simpler construct is honest. The two load-bearing ones so far:
 
 - **Strategy** — raise types: `RaiseCalculation` interface, `PercentageRaise` / `FlatAmountRaise` implementations.
 - **Validator pipeline** (pragmatic chain-of-responsibility) — guardrail as an ordered list of `RaiseValidator`s (amount sanity → cumulative-threshold → ...), each returning apply / park-for-review. Extensible where the domain actually extends.

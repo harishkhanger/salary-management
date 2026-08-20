@@ -98,10 +98,10 @@ public class EmployeeService {
     public PageResponse<EmployeeResponse> directory(int page, int size, String search,
                                                     String country, String department,
                                                     EmployeeStatus status) {
-        int cappedSize = Math.min(Math.max(size, 1), paginationProperties.maxPageSize());
         Page<Employee> result = employeeRepository.findAll(
                 directorySpec(search, country, department, status),
-                PageRequest.of(Math.max(page, 0), cappedSize, Sort.by("name").ascending()));
+                PageRequest.of(paginationProperties.clampPage(page),
+                        paginationProperties.clampSize(size), Sort.by("name").ascending()));
         return PageResponse.from(result, EmployeeResponse::from);
     }
 
