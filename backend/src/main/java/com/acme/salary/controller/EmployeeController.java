@@ -1,6 +1,7 @@
 package com.acme.salary.controller;
 
 import com.acme.salary.dto.request.EmployeeCreateRequest;
+import com.acme.salary.dto.request.EmployeeStatusRequest;
 import com.acme.salary.dto.response.EmployeeResponse;
 import com.acme.salary.dto.request.EmployeeUpdateRequest;
 import com.acme.salary.dto.response.PageResponse;
@@ -42,6 +43,12 @@ public class EmployeeController {
     public EmployeeResponse update(@PathVariable Long id,
                                    @Valid @RequestBody EmployeeUpdateRequest request) {
         return employeeService.update(id, request);
+    }
+
+    @PutMapping("/{id}/status")
+    public EmployeeResponse changeStatus(@PathVariable Long id,
+                                         @Valid @RequestBody EmployeeStatusRequest request) {
+        return employeeService.changeStatus(id, request);
     }
 
     @DeleteMapping("/{id}")

@@ -2,6 +2,7 @@ package com.acme.salary.service;
 
 import com.acme.salary.config.PaginationProperties;
 import com.acme.salary.dto.request.EmployeeCreateRequest;
+import com.acme.salary.dto.request.EmployeeStatusRequest;
 import com.acme.salary.dto.response.EmployeeResponse;
 import com.acme.salary.dto.request.EmployeeUpdateRequest;
 import com.acme.salary.dto.response.PageResponse;
@@ -186,6 +187,31 @@ class EmployeeServiceTest {
                 .isInstanceOf(ConflictException.class)
                 .hasMessageContaining("version");
         verify(employeeRepository, never()).save(any());
+    }
+
+    // --- hold / release ---
+
+    @Test
+    void changeStatusPutsEmployeeOnHold() {
+        Employee existing = existingEmployee(7L);
+        when(employeeRepository.findByIdAndDeletedFalse(7L)).thenReturn(Optional.of(existing));
+        when(employeeRepository.saveAndFlush(any(Employee.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        EmployeeResponse response = service.changeStatus(7L,
+                new EmployeeStatusRequest(EmployeeStatus.ON_HOLD, 3));
+
+        assertThat(response.status()).isEqualTo(EmployeeStatus.ON_HOLD);
+    }
+
+    @Test
+    void changeStatusRejectsStaleVersion() {
+        when(employeeRepository.findByIdAndDeletedFalse(7L)).thenReturn(Optional.of(existingEmployee(7L)));
+
+        assertThatThrownBy(() -> service.changeStatus(7L,
+                new EmployeeStatusRequest(EmployeeStatus.ON_HOLD, 2)))
+                .isInstanceOf(ConflictException.class)
+                .extracting("code").isEqualTo("STALE_VERSION");
+        verify(employeeRepository, never()).saveAndFlush(any());
     }
 
     // --- soft delete ---

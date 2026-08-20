@@ -41,7 +41,7 @@ mirror of this contract; divergence is a bug.
 Session-based (cookie), single seeded HR user. Every other `/api/**` route requires a
 session once auth ships.
 
-## 2. Employees ✅ (hold/release ⬜)
+## 2. Employees ✅
 
 | Method & path | Request | Response `data` |
 |---|---|---|
@@ -50,7 +50,7 @@ session once auth ships.
 | ✅ `PUT /api/employees/{id}` | `{name, email, country, department, currencyCode, joinedOn, version}` — profile only, never salary/status | `Employee` |
 | ✅ `DELETE /api/employees/{id}` | – | `204` (soft delete; history preserved) |
 | ✅ `GET /api/employees` | `?page&size&search&country&department&status` | offset page of `Employee` |
-| ⬜ `PUT /api/employees/{id}/status` | `{status: ACTIVE\|ON_HOLD, version}` | `Employee` (salary hold / release) |
+| ✅ `PUT /api/employees/{id}/status` | `{status: ACTIVE\|ON_HOLD, version}` | `Employee` (salary hold / release) |
 
 `Employee` = `{id, employeeCode, name, email, country, department, currencyCode,
 annualSalary, status, joinedOn, version}`.
@@ -118,14 +118,14 @@ double-pay; crash resume derives from the credits themselves. Held employees are
 skipped and counted. Month rule: past months always; current month only from day
 25 (configurable); future months rejected (VALIDATION).
 
-## 7. Currencies & settings ⬜
+## 7. Currencies & settings ✅
 
 | Method & path | Request | Response `data` |
 |---|---|---|
-| ⬜ `GET /api/currencies` | – | `[{code, name, usdRate, updatedAt}]` |
-| ⬜ `PUT /api/currencies/{code}` | `{usdRate}` | `Currency` (affects future credits/analytics only) |
-| ⬜ `GET /api/settings` | – | `{raiseThresholdPercent}` |
-| ⬜ `PUT /api/settings` | `{raiseThresholdPercent}` | `Settings` |
+| ✅ `GET /api/currencies` | – | `[{code, name, usdRate, updatedAt}]` |
+| ✅ `PUT /api/currencies/{code}` | `{usdRate}` | `Currency` (affects future credits/analytics only) |
+| ✅ `GET /api/settings` | – | `{raiseThresholdPercent}` |
+| ✅ `PUT /api/settings` | `{raiseThresholdPercent}` | `Settings` |
 
 ## 8. Audit feed ⬜
 
@@ -161,16 +161,24 @@ via current rates.
 |---|---|
 | Employees CRUD + directory | ✅ |
 | Salary changes + guardrail parking | ✅ |
-| Employee hold/release | ⬜ |
+| Employee hold/release | ✅ |
 | Bulk raises + preview | ✅ |
 | Review queue approve/reject | ✅ |
 | Payroll runs + credits | ✅ |
-| Currencies & settings | ⬜ |
+| Currencies & settings | ✅ |
 | Audit feed (keyset + run collapse) | ⬜ |
 | Analytics | ⬜ |
 | Auth (session) | ✅ |
 
 ## Future work (post-assessment, deliberately deferred)
+
+- **Payroll credit adjustments** — the idempotency key (employee_id, year, month)
+  deliberately forbids a second credit per period, which also forbids recording a
+  compensating adjustment for an erroneous credit. Production path: entry_type
+  column (REGULAR | ADJUSTMENT) folded into the unique key — regular credits stay
+  idempotent, adjustments become possible. Deferred as clawback-adjacent.
+- **HR password change/rotation** — the seeded credential is fixed; a password
+  change endpoint (and forced-rotation policy) is the production path.
 
 - **Excel-fed differentiated raise runs** — the real appraisal-cycle workflow:
   department heads submit per-employee percentages in a sheet; HR uploads it and the

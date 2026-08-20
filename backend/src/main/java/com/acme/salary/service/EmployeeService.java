@@ -2,6 +2,7 @@ package com.acme.salary.service;
 
 import com.acme.salary.config.PaginationProperties;
 import com.acme.salary.dto.request.EmployeeCreateRequest;
+import com.acme.salary.dto.request.EmployeeStatusRequest;
 import com.acme.salary.dto.response.EmployeeResponse;
 import com.acme.salary.dto.request.EmployeeUpdateRequest;
 import com.acme.salary.dto.response.PageResponse;
@@ -85,6 +86,19 @@ public class EmployeeService {
                 .build();
         // flush so the response carries the post-update optimistic-lock version
         return EmployeeResponse.from(employeeRepository.saveAndFlush(updated));
+    }
+
+    /** Salary hold / release. Holds block payout, never compensation changes. */
+    @Transactional
+    public EmployeeResponse changeStatus(Long id, EmployeeStatusRequest request) {
+        Employee employee = findActive(id);
+        if (employee.getVersion() != request.version()) {
+            throw new ConflictException("STALE_VERSION", "Stale version " + request.version()
+                    + " — the record was modified since it was loaded; reload and retry");
+        }
+        employee.setStatus(request.status());
+        // flush so the response carries the post-update optimistic-lock version
+        return EmployeeResponse.from(employeeRepository.saveAndFlush(employee));
     }
 
     @Transactional
