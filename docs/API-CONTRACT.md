@@ -147,17 +147,18 @@ STATUS_CHANGED, DELETED, SALARY_CHANGED, RAISE_PARKED, RAISE_APPROVED,
 RAISE_REJECTED, SALARY_CREDITED, RUN_COMPLETED, RATE_UPDATED, THRESHOLD_UPDATED.
 Currencies have no numeric id: entityId 0, code inside changed_fields.
 
-## 9. Analytics ⬜
+## 9. Analytics ✅
 
 | Method & path | Request | Response `data` |
 |---|---|---|
-| ⬜ `GET /api/analytics/summary` | – | `{totalMonthlySpendUsd, headcount, onHoldCount, lastPayrollRun:{year, month, processedCount, createdAt}}` |
-| ⬜ `GET /api/analytics/by-country` | – | `[{country, headcount, monthlySpendUsd}]` |
-| ⬜ `GET /api/analytics/by-department` | – | `[{department, headcount, avgAnnualUsd, medianAnnualUsd}]` |
-| ⬜ `GET /api/analytics/salary-distribution` | – | `[{bucketFloorUsd, bucketCeilingUsd, count}]` |
+| ✅ `GET /api/analytics/summary` | – | `{totalMonthlySpendUsd, headcount, onHoldCount, lastPayrollRun:{year, month, processedCount, createdAt}}` |
+| ✅ `GET /api/analytics/by-country` | – | `[{country, headcount, monthlySpendUsd}]` |
+| ✅ `GET /api/analytics/by-department` | – | `[{department, headcount, avgAnnualUsd, medianAnnualUsd}]` |
+| ✅ `GET /api/analytics/salary-distribution` | – | `{bucketUsd, buckets:[{bucketFloorUsd, bucketCeilingUsd, count}]}` (width via app.analytics.distribution-bucket-usd) |
 
 All computed as SQL aggregates in the DB (never loading 10k rows), USD-normalized
-via current rates.
+via current rates. Median uses the portable window-function form (ROW_NUMBER +
+COUNT OVER partition, average of the middle rows) — MySQL has no MEDIAN().
 
 ---
 
@@ -173,7 +174,7 @@ via current rates.
 | Payroll runs + credits | ✅ |
 | Currencies & settings | ✅ |
 | Audit feed (keyset + run collapse) | ✅ |
-| Analytics | ⬜ |
+| Analytics | ✅ |
 | Auth (session) | ✅ |
 
 ## Future work (post-assessment, deliberately deferred)

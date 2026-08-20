@@ -55,7 +55,7 @@ SOLID and clean LLD everywhere, always: constructor injection only, single-respo
 
 ## Deliverables checklist (assessment requirements)
 
-- [ ] Backend API complete per requirements
+- [x] Backend API complete per requirements
 - [ ] React UI: login, employee directory, employee detail (profile / change history / credit history / activity panels), bulk raise + preview + review queue, payroll processing, settings (currencies + guardrail threshold), global audit feed (collapse-by-run), analytics dashboard
 - [ ] Seed script (10k employees + 12 months history)
 - [ ] Tests: Mockito suite + @DataJpaTest slice
