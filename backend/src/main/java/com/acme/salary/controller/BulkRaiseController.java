@@ -1,5 +1,7 @@
 package com.acme.salary.controller;
 
+import java.security.Principal;
+
 import com.acme.salary.dto.request.BulkRaiseExecuteRequest;
 import com.acme.salary.dto.request.BulkRaisePreviewRequest;
 import com.acme.salary.dto.response.BulkRaisePreviewResponse;
@@ -23,9 +25,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class BulkRaiseController {
 
-    // @TODO placeholder until the auth increment supplies the session user
-    private static final String ACTOR = "hr";
-
     private final BulkRaiseService bulkRaiseService;
 
     @PostMapping("/preview")
@@ -36,8 +35,9 @@ public class BulkRaiseController {
     /** Queues the run and returns 202 immediately; poll GET /{id} for progress. */
     @PostMapping
     @ResponseStatus(HttpStatus.ACCEPTED)
-    public BulkRaiseRunResponse execute(@Valid @RequestBody BulkRaiseExecuteRequest request) {
-        return bulkRaiseService.queue(request, ACTOR);
+    public BulkRaiseRunResponse execute(@Valid @RequestBody BulkRaiseExecuteRequest request,
+                                        Principal principal) {
+        return bulkRaiseService.queue(request, principal.getName());
     }
 
     @GetMapping("/{id}")

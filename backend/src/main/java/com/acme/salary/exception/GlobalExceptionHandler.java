@@ -32,6 +32,12 @@ public class GlobalExceptionHandler {
                         "The record was modified by another operation; reload and retry"));
     }
 
+    @ExceptionHandler(UnauthenticatedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUnauthenticated(UnauthenticatedException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.fail("UNAUTHENTICATED", ex.getMessage()));
+    }
+
     @ExceptionHandler(ValidationException.class)
     public ResponseEntity<ApiResponse<Void>> handleBusinessValidation(ValidationException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)

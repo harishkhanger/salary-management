@@ -112,9 +112,13 @@ class RaiseValidatorTest {
 
     @Test
     void downwardCorrectionPasses() {
-        stubThreshold("30.00");
-        when(salaryChangeRepository.findEarliestChangeInWindow(eq(7L), any())).thenReturn(Optional.empty());
-
         assertThat(thresholdValidator().validate(context("100000.00", "80000.00"))).isEmpty();
+    }
+
+    @Test
+    void downwardCorrectionPassesEvenWhenWindowAlreadyOverThreshold() {
+        // salary went 600k -> 891k (+48%) inside the window; correcting DOWN
+        // to 890k must not park — it reduces exposure, never adds to it
+        assertThat(thresholdValidator().validate(context("891000.00", "890000.00"))).isEmpty();
     }
 }

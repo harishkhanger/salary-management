@@ -14,7 +14,7 @@ mirror of this contract; divergence is a bug.
 - **Error codes** (frontend branches on `error.code`, never message text):
   `NOT_FOUND` 404 · `VALIDATION` 400 · `DUPLICATE_CODE` 409 · `UNKNOWN_CURRENCY` 409 ·
   `STALE_VERSION` 409 · `CONCURRENT_MODIFICATION` 409 ·
-  `STALE_PROPOSAL` 409 · `ALREADY_RESOLVED` 409 · `UNAUTHENTICATED` 401 (pending auth).
+  `STALE_PROPOSAL` 409 · `ALREADY_RESOLVED` 409 · `UNAUTHENTICATED` 401.
   New conditions get new codes; this list is the registry.
 - **Offset pagination** (directory-style lists): request `page` (0-based) + `size`
   (clamped to `app.pagination.max-page-size`, 100); response
@@ -25,17 +25,18 @@ mirror of this contract; divergence is a bug.
   loaded; mismatch → 409 `STALE_VERSION`.
 - **Money**: decimal numbers, 2dp, local currency of the employee unless a field is
   explicitly `...Usd`. Timestamps are UTC ISO-8601.
-- **Actor**: recorded from the session user (constant `"hr"` until auth ships).
+- **Actor**: recorded from the session user (Principal); background jobs use the
+  run row's persisted `initiated_by`.
 
 ---
 
-## 1. Auth ⬜
+## 1. Auth ✅
 
 | Method & path | Request | Response `data` |
 |---|---|---|
-| ⬜ `POST /api/auth/login` | `{username, password}` | `{username, name}` + session cookie |
-| ⬜ `POST /api/auth/logout` | – | `204` |
-| ⬜ `GET /api/auth/me` | – | `{username, name}` or 401 `UNAUTHENTICATED` |
+| ✅ `POST /api/auth/login` | `{username, password}` | `{username, name}` + session cookie |
+| ✅ `POST /api/auth/logout` | – | `204` |
+| ✅ `GET /api/auth/me` | – | `{username, name}` or 401 `UNAUTHENTICATED` |
 
 Session-based (cookie), single seeded HR user. Every other `/api/**` route requires a
 session once auth ships.
@@ -167,7 +168,7 @@ via current rates.
 | Currencies & settings | ⬜ |
 | Audit feed (keyset + run collapse) | ⬜ |
 | Analytics | ⬜ |
-| Auth (session) | ⬜ |
+| Auth (session) | ✅ |
 
 ## Future work (post-assessment, deliberately deferred)
 

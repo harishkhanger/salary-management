@@ -27,12 +27,12 @@ Take-home assessment (Incubyte). Read `docs/REQUIREMENTS.md` first — it is the
 - **Raise guardrail:** any change pushing trailing-12-month cumulative raise above a configurable threshold (OrgSettings, default 30%) is parked in a review queue (`RaiseReviewItem`), not auto-applied. Guardrail feeders: cumulative rule, band-less by design.
 - **Bulk raise preview** (dry-run of the same code path): affected count, cost impact, recently-raised employees flagged for optional exclusion. Excluded = simply omitted, never queued.
 - **Optimistic locking** (`@Version` on Employee) — bulk and individual operations can't silently overwrite each other.
-- **Soft-delete employees** — payroll history must survive removal.
+- **Soft-delete employees** — payroll history must survive removal. Deletion is final (no restore, per Harish). Only `employee_code` is unique — globally, including deleted rows (recycling a code would poison history); names and emails are deliberately non-unique (namesakes and rehires must always be creatable; per Harish, no active-only email check either).
 - **Audit ledger:** ONE centralized append-only `audit_log` table. Captured via `@TransactionalEventListener(AFTER_COMMIT)` (documented trade-off: crash window vs business-txn decoupling; outbox pattern is the production path). Thin reference events for salary changes/credits (no amounts duplicated — pointer to the owning row). Bulk-generated rows carry `run_id`; global UI collapses runs into headers (data from run tables), expand = same paginated query filtered by run_id. Per-employee view = same table filtered by entity.
 - **Keyset pagination** for the audit feed (`WHERE (created_at, id) < cursor ORDER BY ... LIMIT n`) — constant-time at any depth. NOT offset. Indexes: `(entity_id, created_at)`, `(created_at, id)`, `(run_id)`.
 - **Seed script:** 10,000 employees across ~10 countries/currencies with realistic distributions, PLUS ~12 months of simulated history (payroll runs, scattered edits/raises) → 300k+ audit rows so the keyset/collapse story is demonstrable.
 - **Currency rates:** ~10 currencies, manually managed rates-to-USD (Settings page). Editing affects future credits/analytics only.
-- **Auth:** minimal session-based login, one seeded HR user, everything else behind it. No roles.
+- **Auth:** minimal session-based login (Spring Security, V4-seeded HR user hr/BCrypt), everything under /api behind it except login. No roles. CSRF disabled — documented trade-off (pure-JSON same-origin SPA; production path: CookieCsrfTokenRepository). Controllers take actor from Principal; pollers from the run row's initiated_by.
 - **Analytics:** SQL aggregates (GROUP BY) in the DB — never load 10k rows into memory. USD-normalized via current rates.
 
 ## API envelope (per Harish, MMT-style)

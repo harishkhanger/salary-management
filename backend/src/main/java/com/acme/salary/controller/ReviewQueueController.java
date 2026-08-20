@@ -1,5 +1,7 @@
 package com.acme.salary.controller;
 
+import java.security.Principal;
+
 import com.acme.salary.dto.response.PageResponse;
 import com.acme.salary.dto.response.ReviewItemResponse;
 import com.acme.salary.dto.response.SalaryChangeOutcome;
@@ -18,9 +20,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ReviewQueueController {
 
-    // @TODO placeholder until the auth increment supplies the session user
-    private static final String ACTOR = "hr";
-
     private final ReviewQueueService reviewQueueService;
 
     @GetMapping
@@ -32,8 +31,8 @@ public class ReviewQueueController {
     }
 
     @PostMapping("/{id}/approve")
-    public SalaryChangeOutcome approve(@PathVariable Long id) {
-        return reviewQueueService.approve(id, ACTOR);
+    public SalaryChangeOutcome approve(@PathVariable Long id, Principal principal) {
+        return reviewQueueService.approve(id, principal.getName());
     }
 
     @PostMapping("/{id}/reject")

@@ -32,6 +32,12 @@ public class CumulativeThresholdValidator implements RaiseValidator {
 
     @Override
     public Optional<String> validate(RaiseContext context) {
+        // a change that does not increase the salary cannot push the
+        // cumulative raise above the threshold — downward corrections pass
+        // even when the trailing window is already above it
+        if (context.proposedSalary().compareTo(context.currentSalary()) <= 0) {
+            return Optional.empty();
+        }
         BigDecimal threshold = orgSettingsRepository.findById(1L)
                 .orElseThrow(() -> new IllegalStateException("org_settings row missing"))
                 .getRaiseThresholdPercent();

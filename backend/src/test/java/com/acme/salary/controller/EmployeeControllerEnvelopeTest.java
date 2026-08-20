@@ -4,6 +4,8 @@ import com.acme.salary.dto.response.EmployeeResponse;
 import com.acme.salary.enums.EmployeeStatus;
 import com.acme.salary.exception.ConflictException;
 import com.acme.salary.exception.NotFoundException;
+import com.acme.salary.config.SecurityConfig;
+import com.acme.salary.repository.HrUserRepository;
 import com.acme.salary.service.EmployeeService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +32,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * failure -> {success:false, data:null, error:{code, message}} with real HTTP status.
  */
 @WebMvcTest(EmployeeController.class)
+@org.springframework.context.annotation.Import(SecurityConfig.class)
+@org.springframework.security.test.context.support.WithMockUser(username = "hr")
 class EmployeeControllerEnvelopeTest {
 
     @Autowired
@@ -37,6 +41,9 @@ class EmployeeControllerEnvelopeTest {
 
     @MockitoBean
     private EmployeeService employeeService;
+
+    @MockitoBean
+    private HrUserRepository hrUserRepository;
 
     private EmployeeResponse employee() {
         return new EmployeeResponse(7L, "EMP-00007", "Asha Rao", "asha@acme.test", "India",

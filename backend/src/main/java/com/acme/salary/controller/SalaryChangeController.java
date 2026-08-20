@@ -1,5 +1,7 @@
 package com.acme.salary.controller;
 
+import java.security.Principal;
+
 import com.acme.salary.dto.response.PageResponse;
 import com.acme.salary.dto.response.SalaryChangeOutcome;
 import com.acme.salary.dto.request.SalaryChangeRequest;
@@ -20,15 +22,13 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class SalaryChangeController {
 
-    // @TODO placeholder until the auth increment supplies the session user
-    private static final String ACTOR = "hr";
-
     private final SalaryChangeService salaryChangeService;
 
     @PostMapping
     public SalaryChangeOutcome apply(@PathVariable Long employeeId,
-                                     @Valid @RequestBody SalaryChangeRequest request) {
-        return salaryChangeService.apply(employeeId, request, ACTOR);
+                                     @Valid @RequestBody SalaryChangeRequest request,
+                                     Principal principal) {
+        return salaryChangeService.apply(employeeId, request, principal.getName());
     }
 
     @GetMapping

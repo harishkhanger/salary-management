@@ -1,5 +1,7 @@
 package com.acme.salary.controller;
 
+import java.security.Principal;
+
 import com.acme.salary.dto.response.PageResponse;
 import com.acme.salary.dto.request.PayrollRunRequest;
 import com.acme.salary.dto.response.PayrollRunResponse;
@@ -21,16 +23,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class PayrollController {
 
-    // @TODO placeholder until the auth increment supplies the session user
-    private static final String ACTOR = "hr";
-
     private final PayrollService payrollService;
 
     /** Queues the run and returns 202 immediately; poll GET /{id} for progress. */
     @PostMapping
     @ResponseStatus(HttpStatus.ACCEPTED)
-    public PayrollRunResponse queue(@Valid @RequestBody PayrollRunRequest request) {
-        return payrollService.queue(request, ACTOR);
+    public PayrollRunResponse queue(@Valid @RequestBody PayrollRunRequest request,
+                                    Principal principal) {
+        return payrollService.queue(request, principal.getName());
     }
 
     @GetMapping("/{id}")
