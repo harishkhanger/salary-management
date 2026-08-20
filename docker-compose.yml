@@ -21,7 +21,7 @@ services:
   backend:
     build: ./backend
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/salary_mgmt
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/salary_mgmt?rewriteBatchedStatements=true
       DB_USER: salary
       DB_PASSWORD: salary
     depends_on:

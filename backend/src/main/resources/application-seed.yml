@@ -1,0 +1,4 @@
+# seed profile: one-shot job — no web server, exits when done
+spring:
+  main:
+    web-application-type: none

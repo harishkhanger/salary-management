@@ -30,7 +30,7 @@ Take-home assessment (Incubyte). Read `docs/REQUIREMENTS.md` first — it is the
 - **Soft-delete employees** — payroll history must survive removal. Deletion is final (no restore, per Harish). Only `employee_code` is unique — globally, including deleted rows (recycling a code would poison history); names and emails are deliberately non-unique (namesakes and rehires must always be creatable; per Harish, no active-only email check either).
 - **Audit ledger:** ONE centralized append-only `audit_log` table. Services publish `AuditEvent`s in-transaction; `AuditTrailListener` writes rows via `@TransactionalEventListener(AFTER_COMMIT, fallbackExecution=true)` + REQUIRES_NEW (trade-off documented: crash window vs business-txn decoupling; outbox is the production path; audit failures are swallowed, never propagate). Thin reference events for salary changes/credits (no amounts duplicated). **Run collapse = approach (b), per Harish:** jobs emit a RUN_COMPLETED audit row; global feed is ONE query (`run_id IS NULL OR RUN_COMPLETED`), headers enriched from run tables at read; expand = same endpoint with runId + runType (required — payroll and bulk run ids may collide). Per-employee view = same table filtered by entity, run items included. Currencies audit with entityId 0 (no numeric id), code in changed_fields.
 - **Keyset pagination** for the audit feed (`WHERE (created_at, id) < cursor ORDER BY ... LIMIT n`) — constant-time at any depth. NOT offset. Indexes: `(entity_id, created_at)`, `(created_at, id)`, `(run_id)`.
-- **Seed script:** 10,000 employees across ~10 countries/currencies with realistic distributions, PLUS ~12 months of simulated history (payroll runs, scattered edits/raises) → 300k+ audit rows so the keyset/collapse story is demonstrable.
+- **Seed script:** 10,000 employees across ~10 countries/currencies with realistic distributions, PLUS ~12 months of simulated history (payroll runs, scattered edits/raises) → ~140k audit rows / ~280k ledger rows total so the keyset/collapse story is demonstrable. Java CommandLineRunner under the "seed" profile (JDBC batch inserts, explicit id counters for the thin-ref graph, deterministic Random(42), skip-guard); run: docker compose run --rm -e SPRING_PROFILES_ACTIVE=seed backend
 - **Currency rates:** ~10 currencies, manually managed rates-to-USD (Settings page). Editing affects future credits/analytics only.
 - **Auth:** minimal session-based login (Spring Security, V4-seeded HR user hr/BCrypt), everything under /api behind it except login. No roles. CSRF disabled — documented trade-off (pure-JSON same-origin SPA; production path: CookieCsrfTokenRepository). Controllers take actor from Principal; pollers from the run row's initiated_by.
 - **Analytics:** SQL aggregates (GROUP BY) in the DB — never load 10k rows into memory. USD-normalized via current rates.
@@ -57,7 +57,7 @@ SOLID and clean LLD everywhere, always: constructor injection only, single-respo
 
 - [x] Backend API complete per requirements
 - [ ] React UI: login, employee directory, employee detail (profile / change history / credit history / activity panels), bulk raise + preview + review queue, payroll processing, settings (currencies + guardrail threshold), global audit feed (collapse-by-run), analytics dashboard
-- [ ] Seed script (10k employees + 12 months history)
+- [x] Seed script (10k employees + 12 months history)
 - [ ] Tests: Mockito suite + @DataJpaTest slice
 - [ ] Deployed, publicly reachable
 - [ ] Demo video
