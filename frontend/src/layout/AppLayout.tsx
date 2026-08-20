@@ -1,25 +1,25 @@
-import { Layout, Menu, Button, Typography, Spin } from 'antd'
-import {
-  TeamOutlined,
-  RiseOutlined,
-  AuditOutlined,
-  DollarOutlined,
-  SettingOutlined,
-  BarChartOutlined,
-  FileSearchOutlined,
-  LogoutOutlined,
-} from '@ant-design/icons'
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
+import { Spinner } from '../components/ui'
+import {
+  AuditIcon,
+  ChartIcon,
+  CoinsIcon,
+  GearIcon,
+  LogoutIcon,
+  QueueIcon,
+  RiseIcon,
+  TeamIcon,
+} from '../components/icons'
 
-const items = [
-  { key: '/', icon: <BarChartOutlined />, label: 'Dashboard' },
-  { key: '/employees', icon: <TeamOutlined />, label: 'Employees' },
-  { key: '/bulk-raises', icon: <RiseOutlined />, label: 'Bulk raises' },
-  { key: '/review-queue', icon: <FileSearchOutlined />, label: 'Review queue' },
-  { key: '/payroll', icon: <DollarOutlined />, label: 'Payroll' },
-  { key: '/audit', icon: <AuditOutlined />, label: 'Audit feed' },
-  { key: '/settings', icon: <SettingOutlined />, label: 'Settings' },
+const nav = [
+  { path: '/', label: 'Dashboard', icon: <ChartIcon /> },
+  { path: '/employees', label: 'Employees', icon: <TeamIcon /> },
+  { path: '/bulk-raises', label: 'Bulk raises', icon: <RiseIcon /> },
+  { path: '/review-queue', label: 'Review queue', icon: <QueueIcon /> },
+  { path: '/payroll', label: 'Payroll', icon: <CoinsIcon /> },
+  { path: '/audit', label: 'Audit feed', icon: <AuditIcon /> },
+  { path: '/settings', label: 'Settings', icon: <GearIcon /> },
 ]
 
 export default function AppLayout() {
@@ -27,42 +27,48 @@ export default function AppLayout() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  if (loading) {
-    return <Spin size="large" style={{ display: 'block', marginTop: '20vh' }} />
-  }
-  if (!user) {
-    return <Navigate to="/login" replace />
-  }
+  if (loading) return <Spinner />
+  if (!user) return <Navigate to="/login" replace />
 
-  const selected = '/' + (location.pathname.split('/')[1] ?? '')
+  const section = '/' + (location.pathname.split('/')[1] ?? '')
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Layout.Sider theme="dark" width={220}>
-        <Typography.Title level={5} style={{ color: 'white', textAlign: 'center', padding: '16px 0 0' }}>
+    <div className="shell">
+      <aside className="sidebar">
+        <div className="sidebar-brand">
+          <div className="sidebar-brand-mark">S</div>
           Salary Mgmt
-        </Typography.Title>
-        <Menu
-          theme="dark"
-          mode="inline"
-          selectedKeys={[selected]}
-          items={items}
-          onClick={(e) => navigate(e.key)}
-        />
-      </Layout.Sider>
-      <Layout>
-        <Layout.Header
-          style={{ background: 'white', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 12 }}
-        >
-          <span>{user.name}</span>
-          <Button icon={<LogoutOutlined />} onClick={() => logout().then(() => navigate('/login'))}>
+        </div>
+        <nav className="sidebar-nav">
+          {nav.map((item) => (
+            <button
+              key={item.path}
+              className={`nav-item${section === item.path ? ' active' : ''}`}
+              onClick={() => navigate(item.path)}
+            >
+              {item.icon}
+              {item.label}
+            </button>
+          ))}
+        </nav>
+      </aside>
+      <div className="main">
+        <header className="topbar">
+          <span className="topbar-user">
+            <span className="avatar">{user.name.charAt(0).toUpperCase()}</span>
+            {user.name}
+          </span>
+          <button className="btn btn-sm" onClick={() => logout().then(() => navigate('/login'))}>
+            <span style={{ width: 15, height: 15, display: 'inline-flex' }}>
+              <LogoutIcon />
+            </span>
             Logout
-          </Button>
-        </Layout.Header>
-        <Layout.Content style={{ margin: 24 }}>
+          </button>
+        </header>
+        <main className="content">
           <Outlet />
-        </Layout.Content>
-      </Layout>
-    </Layout>
+        </main>
+      </div>
+    </div>
   )
 }

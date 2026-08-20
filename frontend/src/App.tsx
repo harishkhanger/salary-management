@@ -1,18 +1,22 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
-import { ConfigProvider } from 'antd'
 import { AuthProvider } from './auth/AuthContext'
+import { ToasterProvider } from './components/Toaster'
 import AppLayout from './layout/AppLayout'
 import LoginPage from './pages/LoginPage'
 import EmployeeDirectoryPage from './pages/EmployeeDirectoryPage'
-import { Typography } from 'antd'
+import EmployeeFormPage from './pages/EmployeeFormPage'
+import EmployeeDetailPage from './pages/EmployeeDetailPage'
 
 const Placeholder = ({ name }: { name: string }) => (
-  <Typography.Title level={4}>{name} — coming in the next increment</Typography.Title>
+  <div className="card">
+    <h3>{name}</h3>
+    <p className="muted">Coming in the next increment.</p>
+  </div>
 )
 
 export default function App() {
   return (
-    <ConfigProvider>
+    <ToasterProvider>
       <AuthProvider>
         <BrowserRouter>
           <Routes>
@@ -20,8 +24,9 @@ export default function App() {
             <Route element={<AppLayout />}>
               <Route path="/" element={<Placeholder name="Dashboard" />} />
               <Route path="/employees" element={<EmployeeDirectoryPage />} />
-              <Route path="/employees/new" element={<Placeholder name="Create employee" />} />
-              <Route path="/employees/:id" element={<Placeholder name="Employee detail" />} />
+              <Route path="/employees/new" element={<EmployeeFormPage />} />
+              <Route path="/employees/:id" element={<EmployeeDetailPage />} />
+              <Route path="/employees/:id/edit" element={<EmployeeFormPage />} />
               <Route path="/bulk-raises" element={<Placeholder name="Bulk raises" />} />
               <Route path="/review-queue" element={<Placeholder name="Review queue" />} />
               <Route path="/payroll" element={<Placeholder name="Payroll" />} />
@@ -31,6 +36,6 @@ export default function App() {
           </Routes>
         </BrowserRouter>
       </AuthProvider>
-    </ConfigProvider>
+    </ToasterProvider>
   )
 }
