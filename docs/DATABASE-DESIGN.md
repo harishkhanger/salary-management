@@ -63,6 +63,9 @@ erDiagram
         int applied_count
         int review_count
         int excluded_count
+        enum status "QUEUED | RUNNING | COMPLETED - job state"
+        json excluded_ids "persisted for crash resume"
+        varchar initiated_by
         datetime created_at
     }
     RAISE_REVIEW_ITEMS {
@@ -147,3 +150,4 @@ Rarer filter combinations on the audit feed ride the `created_at` index and scan
 - `audit_log.changed_fields` is JSON (`old → new` per field) for profile edits; **salary events store no amounts here** — they are thin references (`ref_table`, `ref_id`) to the owning row. Complete trail, zero duplication.
 - `run_id` on `audit_log` is the collapse key: the global UI groups bulk-generated rows under one header sourced from the run tables.
 - At production scale: monthly partitioning of `audit_log` + archival policy (documented, deliberately not built).
+- **Bulk raise runs are durable jobs (V2):** `status` drives an outbox-style poller; which employees are already processed is *derived* from `salary_changes`/`raise_review_items` tagged with the run id — the append-only ledger doubles as the job's progress record, so no per-item work table exists and crash-resume never double-applies.

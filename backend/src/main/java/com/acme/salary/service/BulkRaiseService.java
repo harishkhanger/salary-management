@@ -2,26 +2,33 @@ package com.acme.salary.service;
 
 import com.acme.salary.config.BulkRaiseProperties;
 import com.acme.salary.config.PaginationProperties;
-import com.acme.salary.dto.PageResponse;
 import com.acme.salary.dto.BulkRaiseExecuteRequest;
 import com.acme.salary.dto.BulkRaisePreviewRequest;
 import com.acme.salary.dto.BulkRaisePreviewResponse;
 import com.acme.salary.dto.BulkRaisePreviewResponse.CostImpactEntry;
 import com.acme.salary.dto.BulkRaiseRunResponse;
 import com.acme.salary.dto.CurrencyCohortAggregate;
+import com.acme.salary.dto.PageResponse;
 import com.acme.salary.dto.RecentlyRaisedEmployee;
 import com.acme.salary.dto.SalaryChangeOutcome;
 import com.acme.salary.entities.BulkRaiseRun;
 import com.acme.salary.entities.CurrencyRate;
+import com.acme.salary.enums.BulkRaiseStatus;
 import com.acme.salary.enums.ChangeType;
 import com.acme.salary.enums.RaiseType;
+import com.acme.salary.exception.NotFoundException;
 import com.acme.salary.repository.BulkRaiseRunRepository;
 import com.acme.salary.repository.CurrencyRateRepository;
 import com.acme.salary.repository.EmployeeRepository;
+import com.acme.salary.repository.RaiseReviewItemRepository;
 import com.acme.salary.repository.SalaryChangeRepository;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -32,13 +39,16 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Orchestrates bulk raises. Deliberately NOT @Transactional: each item runs in
- * its own REQUIRES_NEW transaction via BulkRaiseItemProcessor — partial
- * progress plus a review queue beats blocking a 10k cohort on one bad record.
+ * Bulk raises run as a durable background job (outbox-style): queue() persists
+ * the run row as the job record and returns immediately; BulkRaiseRunPoller
+ * picks it up and drives processRun(). Progress and resume state are DERIVED
+ * from the append-only ledger — salary_changes and raise_review_items tagged
+ * with the run id — so a crash loses nothing and resumes exactly where it died.
+ * Deliberately NOT @Transactional: each item runs in its own REQUIRES_NEW
+ * transaction via BulkRaiseItemProcessor.
  */
 @Service
 @RequiredArgsConstructor
@@ -46,14 +56,18 @@ import java.util.stream.Collectors;
 public class BulkRaiseService {
 
     private static final BigDecimal HUNDRED = new BigDecimal("100");
+    /** Refresh the run row's counts every N items so polling clients see progress. */
+    private static final int PROGRESS_UPDATE_EVERY = 100;
 
     private final EmployeeRepository employeeRepository;
     private final SalaryChangeRepository salaryChangeRepository;
+    private final RaiseReviewItemRepository raiseReviewItemRepository;
     private final CurrencyRateRepository currencyRateRepository;
     private final BulkRaiseRunRepository bulkRaiseRunRepository;
     private final BulkRaiseItemProcessor itemProcessor;
     private final BulkRaiseProperties properties;
     private final PaginationProperties paginationProperties;
+    private final ObjectMapper objectMapper;
     private final Clock clock;
 
     /**
@@ -88,31 +102,50 @@ public class BulkRaiseService {
         return new BulkRaisePreviewResponse(affectedCount, costImpact, usdDelta, recentlyRaised);
     }
 
-    public BulkRaiseRunResponse execute(BulkRaiseExecuteRequest request, String actor) {
+    /** Persists the job record and returns immediately (202); the poller executes it. */
+    public BulkRaiseRunResponse queue(BulkRaiseExecuteRequest request, String actor) {
         BulkRaiseRun run = bulkRaiseRunRepository.save(BulkRaiseRun.builder()
                 .raiseType(request.raiseType())
                 .raiseValue(request.value())
                 .filterCountry(blankToNull(request.filterCountry()))
                 .filterDepartment(blankToNull(request.filterDepartment()))
+                .excludedIds(toJson(request.excludedEmployeeIdsOrEmpty()))
+                .initiatedBy(actor)
+                .status(BulkRaiseStatus.QUEUED)
                 .createdAt(LocalDateTime.now(clock))
                 .build());
+        return BulkRaiseRunResponse.from(run);
+    }
+
+    /**
+     * Executes (or resumes) one run. Already-processed employees are those
+     * with a change or review item tagged with this run id — the ledger is
+     * the progress record, so re-entry after a crash never double-applies.
+     */
+    public void processRun(BulkRaiseRun run) {
+        run.setStatus(BulkRaiseStatus.RUNNING);
+        bulkRaiseRunRepository.save(run);
 
         List<Long> cohortIds = employeeRepository.findCohortIds(
-                blankToNull(request.filterCountry()), blankToNull(request.filterDepartment()));
-        Set<Long> excluded = new HashSet<>(request.excludedEmployeeIdsOrEmpty());
-        ChangeType changeType = toChangeType(request.raiseType());
+                run.getFilterCountry(), run.getFilterDepartment());
+        Set<Long> excluded = new HashSet<>(fromJson(run.getExcludedIds()));
+        Set<Long> alreadyProcessed = new HashSet<>(
+                salaryChangeRepository.findEmployeeIdsByRun(run.getId()));
+        alreadyProcessed.addAll(raiseReviewItemRepository.findEmployeeIdsByRun(run.getId()));
 
-        int applied = 0;
-        int parked = 0;
-        int excludedCount = 0;
+        int applied = salaryChangeRepository.findEmployeeIdsByRun(run.getId()).size();
+        int parked = alreadyProcessed.size() - applied;
+        int excludedCount = (int) cohortIds.stream().filter(excluded::contains).count();
+        ChangeType changeType = toChangeType(run.getRaiseType());
+
+        int sinceProgressUpdate = 0;
         for (Long employeeId : cohortIds) {
-            if (excluded.contains(employeeId)) {
-                excludedCount++;
+            if (excluded.contains(employeeId) || alreadyProcessed.contains(employeeId)) {
                 continue;
             }
             try {
-                SalaryChangeOutcome outcome = itemProcessor.process(
-                        employeeId, changeType, request.value(), run.getId(), actor);
+                SalaryChangeOutcome outcome = itemProcessor.process(employeeId, changeType,
+                        run.getRaiseValue(), run.getId(), run.getInitiatedBy());
                 if (outcome.status() == SalaryChangeOutcome.Status.APPLIED) {
                     applied++;
                 } else {
@@ -122,21 +155,37 @@ public class BulkRaiseService {
                 log.warn("Bulk raise run {} item failed for employee {}: {}",
                         run.getId(), employeeId, e.getMessage());
             }
+            if (++sinceProgressUpdate >= PROGRESS_UPDATE_EVERY) {
+                updateCounts(run, applied, parked, excludedCount);
+                sinceProgressUpdate = 0;
+            }
         }
 
-        run.setAppliedCount(applied);
-        run.setReviewCount(parked);
-        run.setExcludedCount(excludedCount);
-        return BulkRaiseRunResponse.from(bulkRaiseRunRepository.save(run));
+        updateCounts(run, applied, parked, excludedCount);
+        run.setStatus(BulkRaiseStatus.COMPLETED);
+        bulkRaiseRunRepository.save(run);
+        log.info("Bulk raise run {} completed: applied={}, review={}, excluded={}",
+                run.getId(), applied, parked, excludedCount);
+    }
+
+    public BulkRaiseRunResponse getRun(Long id) {
+        return BulkRaiseRunResponse.from(bulkRaiseRunRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Bulk raise run not found: " + id)));
     }
 
     public PageResponse<BulkRaiseRunResponse> listRuns(int page, int size) {
         return PageResponse.from(bulkRaiseRunRepository.findAll(
-                        PageRequest.of(
-                                paginationProperties.clampPage(page),
+                        PageRequest.of(paginationProperties.clampPage(page),
                                 paginationProperties.clampSize(size),
-                                org.springframework.data.domain.Sort.by("createdAt").descending())),
+                                Sort.by("createdAt").descending())),
                 BulkRaiseRunResponse::from);
+    }
+
+    private void updateCounts(BulkRaiseRun run, int applied, int parked, int excludedCount) {
+        run.setAppliedCount(applied);
+        run.setReviewCount(parked);
+        run.setExcludedCount(excludedCount);
+        bulkRaiseRunRepository.save(run);
     }
 
     private BigDecimal proposedTotal(CurrencyCohortAggregate aggregate,
@@ -152,6 +201,26 @@ public class BulkRaiseService {
 
     private ChangeType toChangeType(RaiseType raiseType) {
         return raiseType == RaiseType.PERCENT ? ChangeType.PERCENT : ChangeType.AMOUNT;
+    }
+
+    private String toJson(List<Long> ids) {
+        try {
+            return ids.isEmpty() ? null : objectMapper.writeValueAsString(ids);
+        } catch (JacksonException e) {
+            throw new IllegalStateException("Could not serialize excluded ids", e);
+        }
+    }
+
+    private List<Long> fromJson(String json) {
+        if (json == null || json.isBlank()) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<Long>>() {
+            });
+        } catch (JacksonException e) {
+            throw new IllegalStateException("Could not parse excluded ids: " + json, e);
+        }
     }
 
     private String blankToNull(String value) {

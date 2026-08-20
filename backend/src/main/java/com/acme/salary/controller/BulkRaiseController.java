@@ -8,7 +8,10 @@ import com.acme.salary.dto.PageResponse;
 import com.acme.salary.service.BulkRaiseService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -30,9 +33,16 @@ public class BulkRaiseController {
         return bulkRaiseService.preview(request);
     }
 
+    /** Queues the run and returns 202 immediately; poll GET /{id} for progress. */
     @PostMapping
+    @ResponseStatus(HttpStatus.ACCEPTED)
     public BulkRaiseRunResponse execute(@Valid @RequestBody BulkRaiseExecuteRequest request) {
-        return bulkRaiseService.execute(request, ACTOR);
+        return bulkRaiseService.queue(request, ACTOR);
+    }
+
+    @GetMapping("/{id}")
+    public BulkRaiseRunResponse get(@PathVariable Long id) {
+        return bulkRaiseService.getRun(id);
     }
 
     @GetMapping

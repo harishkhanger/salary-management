@@ -19,3 +19,4 @@ app:
     max-page-size: 100
   bulk-raise:
     recently-raised-days: 90
+    poll-interval-ms: 2000

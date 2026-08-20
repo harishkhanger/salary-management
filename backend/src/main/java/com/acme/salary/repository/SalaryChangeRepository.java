@@ -56,4 +56,8 @@ public interface SalaryChangeRepository extends JpaRepository<SalaryChange, Long
     List<RecentlyRaisedEmployee> findRecentlyRaised(@Param("country") String country,
                                                     @Param("department") String department,
                                                     @Param("cutoff") LocalDateTime cutoff);
+
+    /** Resume support: employees this bulk run has already applied a change to. */
+    @Query("SELECT c.employeeId FROM SalaryChange c WHERE c.bulkRaiseRunId = :runId")
+    List<Long> findEmployeeIdsByRun(@Param("runId") Long runId);
 }

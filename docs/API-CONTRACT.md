@@ -71,14 +71,20 @@ actor, bulkRaiseRunId, createdAt}` (append-only).
 | Method & path | Request | Response `data` |
 |---|---|---|
 | ✅ `POST /api/bulk-raises/preview` | `{raiseType: PERCENT\|AMOUNT, value, filterCountry?, filterDepartment?}` (no filters = whole org) | `{affectedCount, costImpact:[{currencyCode, current, proposed, delta}], costImpactUsdDelta, recentlyRaised:[{employeeId, employeeCode, name, lastRaiseAt}]}` |
-| ✅ `POST /api/bulk-raises` | preview request + `{excludedEmployeeIds:[]}` | `BulkRaiseRun` summary |
+| ✅ `POST /api/bulk-raises` | preview request + `{excludedEmployeeIds:[]}` | **202** `BulkRaiseRun` (status QUEUED) — durable job, poll for progress |
+| ✅ `GET /api/bulk-raises/{id}` | – | `BulkRaiseRun` (live counts while RUNNING) |
 | ✅ `GET /api/bulk-raises` | `?page&size` | offset page of `BulkRaiseRun` |
 
 `BulkRaiseRun` = `{id, raiseType, raiseValue, filterCountry, filterDepartment,
-appliedCount, reviewCount, excludedCount, createdAt}`.
-Preview is a dry-run of the same code path. Execution: per-item transactions
-(REQUIRES_NEW) — one bad record never blocks the cohort; guardrail parks per item.
-Excluded employees are simply omitted, never queued.
+status: QUEUED|RUNNING|COMPLETED, appliedCount, reviewCount, excludedCount,
+initiatedBy, createdAt}`.
+Preview is a dry-run of the same code path. Execution is a durable background
+job (outbox-style): the run row is the job record; a poller picks up QUEUED/
+crashed-RUNNING runs; per-item transactions (REQUIRES_NEW) — one bad record
+never blocks the cohort; guardrail parks per item; counts refresh every 100
+items for progress polling. Resume state is derived from the append-only
+ledger (changes/review items tagged with run_id) — a crash never double-applies.
+Excluded employees are simply omitted, never queued (persisted for resume).
 
 ## 5. Review queue ✅
 
