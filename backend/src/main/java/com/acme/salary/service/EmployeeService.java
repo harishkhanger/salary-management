@@ -32,7 +32,8 @@ public class EmployeeService {
         requireKnownCurrency(request.currencyCode());
         boolean codeSupplied = request.employeeCode() != null && !request.employeeCode().isBlank();
         if (codeSupplied && employeeRepository.existsByEmployeeCode(request.employeeCode())) {
-            throw new ConflictException("Employee code already in use: " + request.employeeCode());
+            throw new ConflictException("DUPLICATE_CODE",
+                    "Employee code already in use: " + request.employeeCode());
         }
 
         Employee employee = Employee.builder()
@@ -67,7 +68,7 @@ public class EmployeeService {
     public EmployeeResponse update(Long id, EmployeeUpdateRequest request) {
         Employee employee = findActive(id);
         if (employee.getVersion() != request.version()) {
-            throw new ConflictException("Stale version " + request.version()
+            throw new ConflictException("STALE_VERSION", "Stale version " + request.version()
                     + " — the record was modified since it was loaded; reload and retry");
         }
         requireKnownCurrency(request.currencyCode());
@@ -132,7 +133,7 @@ public class EmployeeService {
 
     private void requireKnownCurrency(String currencyCode) {
         if (!currencyRateRepository.existsById(currencyCode)) {
-            throw new ConflictException("Unknown currency: " + currencyCode);
+            throw new ConflictException("UNKNOWN_CURRENCY", "Unknown currency: " + currencyCode);
         }
     }
 }

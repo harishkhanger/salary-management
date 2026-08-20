@@ -34,6 +34,10 @@ Take-home assessment (Incubyte). Read `docs/REQUIREMENTS.md` first — it is the
 - **Auth:** minimal session-based login, one seeded HR user, everything else behind it. No roles.
 - **Analytics:** SQL aggregates (GROUP BY) in the DB — never load 10k rows into memory. USD-normalized via current rates.
 
+## API envelope (per Harish, MMT-style)
+
+Every `/api/**` response is wrapped in `ApiResponse<T>`: success → `{success:true, data, error:null}`, failure → `{success:false, data:null, error:{code, message}}` with the real HTTP status preserved. Controllers return plain DTOs — `ApiResponseWrapper` (ResponseBodyAdvice) wraps automatically; `GlobalExceptionHandler` emits the same shape. Error codes are machine-readable (`NOT_FOUND`, `VALIDATION`, `DUPLICATE_CODE`, `UNKNOWN_CURRENCY`, `STALE_VERSION`, `CONCURRENT_MODIFICATION`, ...); the frontend branches on `error.code`, never message text. New error conditions get a new code, listed here.
+
 ## Package layout (layer-based, per Harish)
 
 `com.acme.salary.{entities, enums, repository, service, controller, dto, config, ...}` — group by layer, not by feature. Entities in `entities/`, enums in `enums/`; add each layer folder when the first class of that layer appears.

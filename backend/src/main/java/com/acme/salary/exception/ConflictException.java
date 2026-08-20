@@ -1,8 +1,14 @@
 package com.acme.salary.exception;
 
+import lombok.Getter;
+
+@Getter
 public class ConflictException extends RuntimeException {
 
-    public ConflictException(String message) {
+    private final String code;
+
+    public ConflictException(String code, String message) {
         super(message);
+        this.code = code;
     }
 }
