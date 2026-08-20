@@ -6,6 +6,8 @@ import LoginPage from './pages/LoginPage'
 import EmployeeDirectoryPage from './pages/EmployeeDirectoryPage'
 import EmployeeFormPage from './pages/EmployeeFormPage'
 import EmployeeDetailPage from './pages/EmployeeDetailPage'
+import BulkRaisesPage from './pages/BulkRaisesPage'
+import ReviewQueuePage from './pages/ReviewQueuePage'
 
 const Placeholder = ({ name }: { name: string }) => (
   <div className="card">
@@ -27,8 +29,8 @@ export default function App() {
               <Route path="/employees/new" element={<EmployeeFormPage />} />
               <Route path="/employees/:id" element={<EmployeeDetailPage />} />
               <Route path="/employees/:id/edit" element={<EmployeeFormPage />} />
-              <Route path="/bulk-raises" element={<Placeholder name="Bulk raises" />} />
-              <Route path="/review-queue" element={<Placeholder name="Review queue" />} />
+              <Route path="/bulk-raises" element={<BulkRaisesPage />} />
+              <Route path="/review-queue" element={<ReviewQueuePage />} />
               <Route path="/payroll" element={<Placeholder name="Payroll" />} />
               <Route path="/audit" element={<Placeholder name="Audit feed" />} />
               <Route path="/settings" element={<Placeholder name="Settings" />} />
