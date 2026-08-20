@@ -36,7 +36,7 @@ public class ReviewQueueController {
     }
 
     @PostMapping("/{id}/reject")
-    public ReviewItemResponse reject(@PathVariable Long id) {
-        return reviewQueueService.reject(id);
+    public ReviewItemResponse reject(@PathVariable Long id, Principal principal) {
+        return reviewQueueService.reject(id, principal.getName());
     }
 }

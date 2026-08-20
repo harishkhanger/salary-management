@@ -14,9 +14,12 @@ import com.acme.salary.dto.response.RecentlyRaisedEmployee;
 import com.acme.salary.dto.response.SalaryChangeOutcome;
 import com.acme.salary.entities.BulkRaiseRun;
 import com.acme.salary.entities.CurrencyRate;
+import com.acme.salary.enums.AuditAction;
+import com.acme.salary.enums.AuditEntityType;
 import com.acme.salary.enums.JobStatus;
 import com.acme.salary.enums.ChangeType;
 import com.acme.salary.enums.RaiseType;
+import com.acme.salary.events.AuditEvent;
 import com.acme.salary.exception.NotFoundException;
 import com.acme.salary.repository.BulkRaiseRunRepository;
 import com.acme.salary.repository.CurrencyRateRepository;
@@ -28,6 +31,7 @@ import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -68,6 +72,7 @@ public class BulkRaiseService {
     private final JobProperties jobProperties;
     private final PaginationProperties paginationProperties;
     private final ObjectMapper objectMapper;
+    private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
     /**
@@ -164,6 +169,11 @@ public class BulkRaiseService {
         updateCounts(run, applied, parked, excludedCount);
         run.setStatus(JobStatus.COMPLETED);
         bulkRaiseRunRepository.save(run);
+        eventPublisher.publishEvent(AuditEvent.builder()
+                .entityType(AuditEntityType.BULK_RAISE_RUN).entityId(run.getId())
+                .action(AuditAction.RUN_COMPLETED).actor(run.getInitiatedBy())
+                .refTable("bulk_raise_runs").refId(run.getId())
+                .runId(run.getId()).build());
         log.info("Bulk raise run {} completed: applied={}, review={}, excluded={}",
                 run.getId(), applied, parked, excludedCount);
     }

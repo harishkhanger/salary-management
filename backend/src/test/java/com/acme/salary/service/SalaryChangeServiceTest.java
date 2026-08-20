@@ -59,6 +59,9 @@ class SalaryChangeServiceTest {
     @Mock
     private RaiseValidator alwaysPassValidator;
 
+    @Mock
+    private org.springframework.context.ApplicationEventPublisher eventPublisher;
+
     private SalaryChangeService service;
 
     @BeforeEach
@@ -66,7 +69,7 @@ class SalaryChangeServiceTest {
         RaiseExecutor executor = new RaiseExecutor(employeeRepository, salaryChangeRepository,
                 raiseReviewItemRepository,
                 List.of(new PercentageRaise(), new FlatAmountRaise(), new SalaryCorrection()),
-                List.of(alwaysPassValidator), FIXED);
+                List.of(alwaysPassValidator), eventPublisher, FIXED);
         service = new SalaryChangeService(employeeRepository, salaryChangeRepository,
                 executor, new PaginationProperties(100));
     }

@@ -127,19 +127,25 @@ skipped and counted. Month rule: past months always; current month only from day
 | ✅ `GET /api/settings` | – | `{raiseThresholdPercent}` |
 | ✅ `PUT /api/settings` | `{raiseThresholdPercent}` | `Settings` |
 
-## 8. Audit feed ⬜
+## 8. Audit feed ✅
 
 | Method & path | Request | Response `data` |
 |---|---|---|
-| ⬜ `GET /api/audit` | `?cursor&limit&entityType&entityId&runId` | `{items:[AuditEntry\|RunHeader], nextCursor}` |
+| ✅ `GET /api/audit` | `?cursor&limit&entityType&entityId&runId&runType` | `{items:[AuditEntry\|RunHeader], nextCursor}` |
 
-Keyset-paginated (`(createdAt, id)` cursor). Global view collapses bulk-generated
-rows: a `RunHeader` = `{kind:"RUN", runType: PAYROLL\|BULK_RAISE, runId, summary
-counts, createdAt}` sourced from the run tables; expanding = same endpoint filtered
-by `runId`. Per-employee activity = same endpoint filtered by
-`entityType=EMPLOYEE&entityId`. `AuditEntry` = `{kind:"ENTRY", id, entityType,
-entityId, action, actor, changedFields?, refTable?, refId?, runId?, createdAt}` —
-thin references; amounts live in the referenced rows.
+Keyset-paginated (`(createdAt, id)` cursor, opaque Base64). Approach (b): run
+headers ARE audit rows — jobs emit one RUN_COMPLETED row; the global view is one
+query (`run_id IS NULL OR action = RUN_COMPLETED`) so item rows collapse and
+headers appear inline, enriched at read time from the run tables (`runSummary`).
+Expanding = same endpoint with `runId` + `runType` (PAYROLL|BULK_RAISE — required
+disambiguator: the two run tables' ids may collide). Per-employee activity = same
+endpoint filtered by `entityType=EMPLOYEE&entityId` (run items included there).
+Item = `{kind: ENTRY|RUN, id, entityType, entityId, action, actor, changedFields?,
+refTable?, refId?, runId?, runSummary?, createdAt}` — money events are thin
+references; amounts live in the referenced rows. Actions: CREATED, PROFILE_UPDATED,
+STATUS_CHANGED, DELETED, SALARY_CHANGED, RAISE_PARKED, RAISE_APPROVED,
+RAISE_REJECTED, SALARY_CREDITED, RUN_COMPLETED, RATE_UPDATED, THRESHOLD_UPDATED.
+Currencies have no numeric id: entityId 0, code inside changed_fields.
 
 ## 9. Analytics ⬜
 
@@ -166,7 +172,7 @@ via current rates.
 | Review queue approve/reject | ✅ |
 | Payroll runs + credits | ✅ |
 | Currencies & settings | ✅ |
-| Audit feed (keyset + run collapse) | ⬜ |
+| Audit feed (keyset + run collapse) | ✅ |
 | Analytics | ⬜ |
 | Auth (session) | ✅ |
 

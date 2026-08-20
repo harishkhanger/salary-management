@@ -47,12 +47,18 @@ class ReviewQueueServiceTest {
     @Mock
     private SalaryChangeRepository salaryChangeRepository;
 
+    @Mock
+    private org.springframework.context.ApplicationEventPublisher eventPublisher;
+
     private ReviewQueueService service;
 
     @BeforeEach
     void setUp() {
+        RaiseExecutor executor = new RaiseExecutor(employeeRepository, salaryChangeRepository,
+                raiseReviewItemRepository, java.util.List.of(), java.util.List.of(),
+                eventPublisher, FIXED);
         service = new ReviewQueueService(raiseReviewItemRepository, employeeRepository,
-                salaryChangeRepository, new PaginationProperties(100), FIXED);
+                executor, eventPublisher, new PaginationProperties(100), FIXED);
     }
 
     private RaiseReviewItem pendingItem() {
@@ -126,7 +132,7 @@ class ReviewQueueServiceTest {
         when(raiseReviewItemRepository.findById(55L)).thenReturn(Optional.of(item));
         when(raiseReviewItemRepository.save(any(RaiseReviewItem.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        ReviewItemResponse response = service.reject(55L);
+        ReviewItemResponse response = service.reject(55L, "hr");
 
         assertThat(response.status()).isEqualTo(ReviewStatus.REJECTED);
         assertThat(item.getResolvedAt()).isNotNull();

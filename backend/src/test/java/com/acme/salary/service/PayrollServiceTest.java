@@ -53,10 +53,13 @@ class PayrollServiceTest {
     @Mock
     private PayrollItemProcessor itemProcessor;
 
+    @Mock
+    private org.springframework.context.ApplicationEventPublisher eventPublisher;
+
     private PayrollService service() {
         return new PayrollService(employeeRepository, salaryCreditRepository,
                 payrollRunRepository, itemProcessor, new PayrollProperties(25),
-                new JobProperties(100), new PaginationProperties(100), FIXED);
+                new JobProperties(100), new PaginationProperties(100), eventPublisher, FIXED);
     }
 
     private void stubRunSave() {
@@ -99,7 +102,7 @@ class PayrollServiceTest {
         Clock day25 = Clock.fixed(Instant.parse("2026-08-25T00:00:00Z"), ZoneOffset.UTC);
         PayrollService service = new PayrollService(employeeRepository, salaryCreditRepository,
                 payrollRunRepository, itemProcessor, new PayrollProperties(25),
-                new JobProperties(100), new PaginationProperties(100), day25);
+                new JobProperties(100), new PaginationProperties(100), eventPublisher, day25);
         stubRunSave();
 
         PayrollRunResponse response = service.queue(new PayrollRunRequest(2026, 8, null), "hr");

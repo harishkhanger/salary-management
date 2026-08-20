@@ -64,6 +64,9 @@ class BulkRaiseServiceTest {
     @Mock
     private BulkRaiseItemProcessor itemProcessor;
 
+    @Mock
+    private org.springframework.context.ApplicationEventPublisher eventPublisher;
+
     private BulkRaiseService service;
 
     @BeforeEach
@@ -71,7 +74,7 @@ class BulkRaiseServiceTest {
         service = new BulkRaiseService(employeeRepository, salaryChangeRepository,
                 raiseReviewItemRepository, currencyRateRepository, bulkRaiseRunRepository,
                 itemProcessor, new BulkRaiseProperties(90), new JobProperties(100),
-                new PaginationProperties(100), new ObjectMapper(), FIXED);
+                new PaginationProperties(100), new ObjectMapper(), eventPublisher, FIXED);
     }
 
     private CurrencyRate rate(String code, String usdRate) {

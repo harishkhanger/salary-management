@@ -8,7 +8,10 @@ import com.acme.salary.dto.request.PayrollRunRequest;
 import com.acme.salary.dto.response.PayrollRunResponse;
 import com.acme.salary.dto.response.SalaryCreditResponse;
 import com.acme.salary.entities.PayrollRun;
+import com.acme.salary.enums.AuditAction;
+import com.acme.salary.enums.AuditEntityType;
 import com.acme.salary.enums.JobStatus;
+import com.acme.salary.events.AuditEvent;
 import com.acme.salary.exception.NotFoundException;
 import com.acme.salary.exception.ValidationException;
 import com.acme.salary.repository.EmployeeRepository;
@@ -16,6 +19,7 @@ import com.acme.salary.repository.PayrollRunRepository;
 import com.acme.salary.repository.SalaryCreditRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -48,6 +52,7 @@ public class PayrollService {
     private final PayrollProperties payrollProperties;
     private final JobProperties jobProperties;
     private final PaginationProperties paginationProperties;
+    private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
     /** Persists the job record and returns immediately (202); the poller executes it. */
@@ -114,6 +119,11 @@ public class PayrollService {
         updateCounts(run, processed, skippedHeld, alreadyProcessed);
         run.setStatus(JobStatus.COMPLETED);
         payrollRunRepository.save(run);
+        eventPublisher.publishEvent(AuditEvent.builder()
+                .entityType(AuditEntityType.PAYROLL_RUN).entityId(run.getId())
+                .action(AuditAction.RUN_COMPLETED).actor(run.getInitiatedBy())
+                .refTable("payroll_runs").refId(run.getId())
+                .runId(run.getId()).build());
         log.info("Payroll run {} ({}-{}) completed: processed={}, skippedHeld={}, alreadyProcessed={}",
                 run.getId(), run.getYear(), run.getMonth(), processed, skippedHeld, alreadyProcessed);
     }

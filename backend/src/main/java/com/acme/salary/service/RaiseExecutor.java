@@ -6,13 +6,17 @@ import com.acme.salary.dto.response.SalaryChangeResponse;
 import com.acme.salary.entities.Employee;
 import com.acme.salary.entities.RaiseReviewItem;
 import com.acme.salary.entities.SalaryChange;
+import com.acme.salary.enums.AuditAction;
+import com.acme.salary.enums.AuditEntityType;
 import com.acme.salary.enums.ChangeType;
+import com.acme.salary.events.AuditEvent;
 import com.acme.salary.repository.EmployeeRepository;
 import com.acme.salary.repository.RaiseReviewItemRepository;
 import com.acme.salary.repository.SalaryChangeRepository;
 import com.acme.salary.service.strategy.RaiseCalculation;
 import com.acme.salary.service.validation.RaiseContext;
 import com.acme.salary.service.validation.RaiseValidator;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -36,6 +40,7 @@ public class RaiseExecutor {
     private final RaiseReviewItemRepository raiseReviewItemRepository;
     private final Map<ChangeType, RaiseCalculation> calculations;
     private final List<RaiseValidator> validators;
+    private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
     public RaiseExecutor(EmployeeRepository employeeRepository,
@@ -43,6 +48,7 @@ public class RaiseExecutor {
                          RaiseReviewItemRepository raiseReviewItemRepository,
                          List<RaiseCalculation> calculations,
                          List<RaiseValidator> validators,
+                         ApplicationEventPublisher eventPublisher,
                          Clock clock) {
         this.employeeRepository = employeeRepository;
         this.salaryChangeRepository = salaryChangeRepository;
@@ -50,6 +56,7 @@ public class RaiseExecutor {
         this.calculations = new EnumMap<>(ChangeType.class);
         calculations.forEach(c -> this.calculations.put(c.type(), c));
         this.validators = validators;
+        this.eventPublisher = eventPublisher;
         this.clock = clock;
     }
 
@@ -76,6 +83,11 @@ public class RaiseExecutor {
                     .reason(parkReason.get())
                     .createdAt(LocalDateTime.now(clock))
                     .build());
+            eventPublisher.publishEvent(AuditEvent.builder()
+                    .entityType(AuditEntityType.EMPLOYEE).entityId(employee.getId())
+                    .action(AuditAction.RAISE_PARKED).actor(actor)
+                    .refTable("raise_review_items").refId(item.getId())
+                    .runId(bulkRaiseRunId).build());
             return SalaryChangeOutcome.parked(item.getId(), parkReason.get());
         }
         return apply(employee, proposedSalary, changeType, percentValue, actor, bulkRaiseRunId);
@@ -101,6 +113,11 @@ public class RaiseExecutor {
                 .bulkRaiseRunId(bulkRaiseRunId)
                 .createdAt(LocalDateTime.now(clock))
                 .build());
+        eventPublisher.publishEvent(AuditEvent.builder()
+                .entityType(AuditEntityType.EMPLOYEE).entityId(employee.getId())
+                .action(AuditAction.SALARY_CHANGED).actor(actor)
+                .refTable("salary_changes").refId(change.getId())
+                .runId(bulkRaiseRunId).build());
         return SalaryChangeOutcome.applied(SalaryChangeResponse.from(change),
                 EmployeeResponse.from(saved));
     }

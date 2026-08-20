@@ -40,9 +40,12 @@ class PayrollItemProcessorTest {
     @Mock
     private SalaryCreditRepository salaryCreditRepository;
 
+    @Mock
+    private org.springframework.context.ApplicationEventPublisher eventPublisher;
+
     private PayrollItemProcessor processor() {
         return new PayrollItemProcessor(employeeRepository, currencyRateRepository,
-                salaryCreditRepository, FIXED);
+                salaryCreditRepository, eventPublisher, FIXED);
     }
 
     private Employee employee() {

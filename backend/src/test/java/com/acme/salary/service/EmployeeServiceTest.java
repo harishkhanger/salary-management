@@ -46,6 +46,9 @@ class EmployeeServiceTest {
     @Mock
     private CurrencyRateRepository currencyRateRepository;
 
+    @Mock
+    private org.springframework.context.ApplicationEventPublisher eventPublisher;
+
     private EmployeeService service;
 
     private static final LocalDate JOINED = LocalDate.of(2024, 3, 1);
@@ -53,7 +56,7 @@ class EmployeeServiceTest {
     @BeforeEach
     void setUp() {
         service = new EmployeeService(employeeRepository, currencyRateRepository,
-                new PaginationProperties(100));
+                new PaginationProperties(100), eventPublisher);
     }
 
     private EmployeeCreateRequest createRequest(String code) {

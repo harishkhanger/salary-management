@@ -39,8 +39,11 @@ class SettingsServiceTest {
     @Mock
     private OrgSettingsRepository orgSettingsRepository;
 
+    @Mock
+    private org.springframework.context.ApplicationEventPublisher eventPublisher;
+
     private SettingsService service() {
-        return new SettingsService(currencyRateRepository, orgSettingsRepository, FIXED);
+        return new SettingsService(currencyRateRepository, orgSettingsRepository, eventPublisher, FIXED);
     }
 
     @Test

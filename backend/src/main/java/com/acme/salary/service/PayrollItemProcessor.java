@@ -3,11 +3,15 @@ package com.acme.salary.service;
 import com.acme.salary.entities.CurrencyRate;
 import com.acme.salary.entities.Employee;
 import com.acme.salary.entities.SalaryCredit;
+import com.acme.salary.enums.AuditAction;
+import com.acme.salary.enums.AuditEntityType;
+import com.acme.salary.events.AuditEvent;
 import com.acme.salary.exception.NotFoundException;
 import com.acme.salary.repository.CurrencyRateRepository;
 import com.acme.salary.repository.EmployeeRepository;
 import com.acme.salary.repository.SalaryCreditRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +36,7 @@ public class PayrollItemProcessor {
     private final EmployeeRepository employeeRepository;
     private final CurrencyRateRepository currencyRateRepository;
     private final SalaryCreditRepository salaryCreditRepository;
+    private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -44,7 +49,7 @@ public class PayrollItemProcessor {
 
         BigDecimal monthlyAmount = employee.getAnnualSalary()
                 .divide(MONTHS_PER_YEAR, 2, RoundingMode.HALF_UP);
-        return salaryCreditRepository.save(SalaryCredit.builder()
+        SalaryCredit saved = salaryCreditRepository.save(SalaryCredit.builder()
                 .employeeId(employeeId)
                 .year(year)
                 .month(month)
@@ -54,5 +59,11 @@ public class PayrollItemProcessor {
                 .payrollRunId(runId)
                 .createdAt(LocalDateTime.now(clock))
                 .build());
+        eventPublisher.publishEvent(AuditEvent.builder()
+                .entityType(AuditEntityType.EMPLOYEE).entityId(employeeId)
+                .action(AuditAction.SALARY_CREDITED).actor("system")
+                .refTable("salary_credits").refId(saved.getId())
+                .runId(runId).build());
+        return saved;
     }
 }

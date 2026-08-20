@@ -7,12 +7,16 @@ import com.acme.salary.dto.response.EmployeeResponse;
 import com.acme.salary.dto.request.EmployeeUpdateRequest;
 import com.acme.salary.dto.response.PageResponse;
 import com.acme.salary.entities.Employee;
+import com.acme.salary.enums.AuditAction;
+import com.acme.salary.enums.AuditEntityType;
 import com.acme.salary.enums.EmployeeStatus;
+import com.acme.salary.events.AuditEvent;
 import com.acme.salary.exception.ConflictException;
 import com.acme.salary.exception.NotFoundException;
 import com.acme.salary.repository.CurrencyRateRepository;
 import com.acme.salary.repository.EmployeeRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -27,6 +31,7 @@ public class EmployeeService {
     private final EmployeeRepository employeeRepository;
     private final CurrencyRateRepository currencyRateRepository;
     private final PaginationProperties paginationProperties;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public EmployeeResponse create(EmployeeCreateRequest request) {
@@ -57,6 +62,9 @@ public class EmployeeService {
             saved.setEmployeeCode("EMP-%05d".formatted(saved.getId()));
             saved = employeeRepository.saveAndFlush(saved);
         }
+        eventPublisher.publishEvent(AuditEvent.builder()
+                .entityType(AuditEntityType.EMPLOYEE).entityId(saved.getId())
+                .action(AuditAction.CREATED).actor(currentActor()).build());
         return EmployeeResponse.from(saved);
     }
 
@@ -84,8 +92,14 @@ public class EmployeeService {
                 .currencyCode(request.currencyCode())
                 .joinedOn(request.joinedOn())
                 .build();
+        java.util.Map<String, Object> changed = diff(employee, request);
         // flush so the response carries the post-update optimistic-lock version
-        return EmployeeResponse.from(employeeRepository.saveAndFlush(updated));
+        Employee saved = employeeRepository.saveAndFlush(updated);
+        eventPublisher.publishEvent(AuditEvent.builder()
+                .entityType(AuditEntityType.EMPLOYEE).entityId(saved.getId())
+                .action(AuditAction.PROFILE_UPDATED).actor(currentActor())
+                .changedFields(changed).build());
+        return EmployeeResponse.from(saved);
     }
 
     /** Salary hold / release. Holds block payout, never compensation changes. */
@@ -96,9 +110,17 @@ public class EmployeeService {
             throw new ConflictException("STALE_VERSION", "Stale version " + request.version()
                     + " — the record was modified since it was loaded; reload and retry");
         }
+        EmployeeStatus oldStatus = employee.getStatus();
         employee.setStatus(request.status());
         // flush so the response carries the post-update optimistic-lock version
-        return EmployeeResponse.from(employeeRepository.saveAndFlush(employee));
+        Employee saved = employeeRepository.saveAndFlush(employee);
+        eventPublisher.publishEvent(AuditEvent.builder()
+                .entityType(AuditEntityType.EMPLOYEE).entityId(saved.getId())
+                .action(AuditAction.STATUS_CHANGED).actor(currentActor())
+                .changedFields(java.util.Map.of("status",
+                        java.util.Map.of("old", oldStatus.name(), "new", request.status().name())))
+                .build());
+        return EmployeeResponse.from(saved);
     }
 
     @Transactional
@@ -106,6 +128,35 @@ public class EmployeeService {
         Employee employee = findActive(id);
         employee.setDeleted(true);
         employeeRepository.save(employee);
+        eventPublisher.publishEvent(AuditEvent.builder()
+                .entityType(AuditEntityType.EMPLOYEE).entityId(employee.getId())
+                .action(AuditAction.DELETED).actor(currentActor()).build());
+    }
+
+    /** old -> new per profile field the update actually changed. */
+    private java.util.Map<String, Object> diff(Employee before, EmployeeUpdateRequest request) {
+        java.util.Map<String, Object> changed = new java.util.LinkedHashMap<>();
+        putIfChanged(changed, "name", before.getName(), request.name());
+        putIfChanged(changed, "email", before.getEmail(), request.email());
+        putIfChanged(changed, "country", before.getCountry(), request.country());
+        putIfChanged(changed, "department", before.getDepartment(), request.department());
+        putIfChanged(changed, "currencyCode", before.getCurrencyCode(), request.currencyCode());
+        putIfChanged(changed, "joinedOn", before.getJoinedOn(), request.joinedOn());
+        return changed;
+    }
+
+    private void putIfChanged(java.util.Map<String, Object> changed, String field,
+                              Object oldValue, Object newValue) {
+        if (!java.util.Objects.equals(oldValue, newValue)) {
+            changed.put(field, java.util.Map.of("old", String.valueOf(oldValue),
+                    "new", String.valueOf(newValue)));
+        }
+    }
+
+    private String currentActor() {
+        var auth = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication();
+        return auth != null ? auth.getName() : "system";
     }
 
     @Transactional(readOnly = true)

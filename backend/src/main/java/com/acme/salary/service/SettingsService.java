@@ -6,10 +6,14 @@ import com.acme.salary.dto.response.CurrencyRateResponse;
 import com.acme.salary.dto.response.SettingsResponse;
 import com.acme.salary.entities.CurrencyRate;
 import com.acme.salary.entities.OrgSettings;
+import com.acme.salary.enums.AuditAction;
+import com.acme.salary.enums.AuditEntityType;
+import com.acme.salary.events.AuditEvent;
 import com.acme.salary.exception.NotFoundException;
 import com.acme.salary.repository.CurrencyRateRepository;
 import com.acme.salary.repository.OrgSettingsRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +36,7 @@ public class SettingsService {
 
     private final CurrencyRateRepository currencyRateRepository;
     private final OrgSettingsRepository orgSettingsRepository;
+    private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
     @Transactional(readOnly = true)
@@ -45,9 +50,19 @@ public class SettingsService {
     public CurrencyRateResponse updateRate(String code, CurrencyRateUpdateRequest request) {
         CurrencyRate rate = currencyRateRepository.findById(code)
                 .orElseThrow(() -> new NotFoundException("Unknown currency: " + code));
+        java.math.BigDecimal oldRate = rate.getUsdRate();
         rate.setUsdRate(request.usdRate());
         rate.setUpdatedAt(LocalDateTime.now(clock));
-        return CurrencyRateResponse.from(currencyRateRepository.save(rate));
+        CurrencyRate saved = currencyRateRepository.save(rate);
+        // currencies have no numeric id: entityId 0 by convention, code in changed_fields
+        eventPublisher.publishEvent(AuditEvent.builder()
+                .entityType(AuditEntityType.CURRENCY).entityId(0L)
+                .action(AuditAction.RATE_UPDATED).actor(currentActor())
+                .changedFields(java.util.Map.of("code", code, "usdRate",
+                        java.util.Map.of("old", oldRate.toPlainString(),
+                                "new", request.usdRate().toPlainString())))
+                .build());
+        return CurrencyRateResponse.from(saved);
     }
 
     @Transactional(readOnly = true)
@@ -58,8 +73,23 @@ public class SettingsService {
     @Transactional
     public SettingsResponse updateSettings(SettingsUpdateRequest request) {
         OrgSettings settings = settingsRow();
+        java.math.BigDecimal oldThreshold = settings.getRaiseThresholdPercent();
         settings.setRaiseThresholdPercent(request.raiseThresholdPercent());
-        return SettingsResponse.from(orgSettingsRepository.save(settings));
+        SettingsResponse response = SettingsResponse.from(orgSettingsRepository.save(settings));
+        eventPublisher.publishEvent(AuditEvent.builder()
+                .entityType(AuditEntityType.SETTINGS).entityId(SETTINGS_ROW_ID)
+                .action(AuditAction.THRESHOLD_UPDATED).actor(currentActor())
+                .changedFields(java.util.Map.of("raiseThresholdPercent",
+                        java.util.Map.of("old", oldThreshold.toPlainString(),
+                                "new", request.raiseThresholdPercent().toPlainString())))
+                .build());
+        return response;
+    }
+
+    private String currentActor() {
+        var auth = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication();
+        return auth != null ? auth.getName() : "system";
     }
 
     private OrgSettings settingsRow() {
