@@ -10,13 +10,8 @@ import BulkRaisesPage from './pages/BulkRaisesPage'
 import ReviewQueuePage from './pages/ReviewQueuePage'
 import PayrollPage from './pages/PayrollPage'
 import SettingsPage from './pages/SettingsPage'
-
-const Placeholder = ({ name }: { name: string }) => (
-  <div className="card">
-    <h3>{name}</h3>
-    <p className="muted">Coming in the next increment.</p>
-  </div>
-)
+import AuditFeedPage from './pages/AuditFeedPage'
+import DashboardPage from './pages/DashboardPage'
 
 export default function App() {
   return (
@@ -26,7 +21,7 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route element={<AppLayout />}>
-              <Route path="/" element={<Placeholder name="Dashboard" />} />
+              <Route path="/" element={<DashboardPage />} />
               <Route path="/employees" element={<EmployeeDirectoryPage />} />
               <Route path="/employees/new" element={<EmployeeFormPage />} />
               <Route path="/employees/:id" element={<EmployeeDetailPage />} />
@@ -34,7 +29,7 @@ export default function App() {
               <Route path="/bulk-raises" element={<BulkRaisesPage />} />
               <Route path="/review-queue" element={<ReviewQueuePage />} />
               <Route path="/payroll" element={<PayrollPage />} />
-              <Route path="/audit" element={<Placeholder name="Audit feed" />} />
+              <Route path="/audit" element={<AuditFeedPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
           </Routes>
