@@ -63,10 +63,12 @@ class SalaryChangeServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new SalaryChangeService(employeeRepository, salaryChangeRepository,
+        RaiseExecutor executor = new RaiseExecutor(employeeRepository, salaryChangeRepository,
                 raiseReviewItemRepository,
                 List.of(new PercentageRaise(), new FlatAmountRaise(), new SalaryCorrection()),
-                List.of(alwaysPassValidator), new PaginationProperties(100), FIXED);
+                List.of(alwaysPassValidator), FIXED);
+        service = new SalaryChangeService(employeeRepository, salaryChangeRepository,
+                executor, new PaginationProperties(100));
     }
 
     private Employee employee() {

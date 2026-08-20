@@ -36,7 +36,7 @@ Take-home assessment (Incubyte). Read `docs/REQUIREMENTS.md` first — it is the
 
 ## API envelope (per Harish, MMT-style)
 
-Every `/api/**` response is wrapped in `ApiResponse<T>`: success → `{success:true, data, error:null}`, failure → `{success:false, data:null, error:{code, message}}` with the real HTTP status preserved. Controllers return plain DTOs — `ApiResponseWrapper` (ResponseBodyAdvice) wraps automatically; `GlobalExceptionHandler` emits the same shape. Error codes are machine-readable (`NOT_FOUND`, `VALIDATION`, `DUPLICATE_CODE`, `UNKNOWN_CURRENCY`, `STALE_VERSION`, `CONCURRENT_MODIFICATION`, ...); the frontend branches on `error.code`, never message text. New error conditions get a new code, listed here.
+Every `/api/**` response is wrapped in `ApiResponse<T>`: success → `{success:true, data, error:null}`, failure → `{success:false, data:null, error:{code, message}}` with the real HTTP status preserved. Controllers return plain DTOs — `ApiResponseWrapper` (ResponseBodyAdvice) wraps automatically; `GlobalExceptionHandler` emits the same shape. Error codes are machine-readable (`NOT_FOUND`, `VALIDATION`, `DUPLICATE_CODE`, `UNKNOWN_CURRENCY`, `STALE_VERSION`, `CONCURRENT_MODIFICATION`, `STALE_PROPOSAL`, `ALREADY_RESOLVED`, ...); the frontend branches on `error.code`, never message text. New error conditions get a new code, listed here.
 
 ## Package layout (layer-based, per Harish)
 

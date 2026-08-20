@@ -13,7 +13,8 @@ mirror of this contract; divergence is a bug.
   `DELETE` success is a bodyless `204`.
 - **Error codes** (frontend branches on `error.code`, never message text):
   `NOT_FOUND` 404 · `VALIDATION` 400 · `DUPLICATE_CODE` 409 · `UNKNOWN_CURRENCY` 409 ·
-  `STALE_VERSION` 409 · `CONCURRENT_MODIFICATION` 409 · `UNAUTHENTICATED` 401 (pending auth).
+  `STALE_VERSION` 409 · `CONCURRENT_MODIFICATION` 409 ·
+  `STALE_PROPOSAL` 409 · `ALREADY_RESOLVED` 409 · `UNAUTHENTICATED` 401 (pending auth).
   New conditions get new codes; this list is the registry.
 - **Offset pagination** (directory-style lists): request `page` (0-based) + `size`
   (clamped to `app.pagination.max-page-size`, 100); response
@@ -65,13 +66,13 @@ annualSalary, status, joinedOn, version}`.
 `SalaryChange` = `{id, employeeId, oldSalary, newSalary, changeType, percentValue,
 actor, bulkRaiseRunId, createdAt}` (append-only).
 
-## 4. Bulk raises ⬜
+## 4. Bulk raises ✅
 
 | Method & path | Request | Response `data` |
 |---|---|---|
-| ⬜ `POST /api/bulk-raises/preview` | `{raiseType: PERCENT\|AMOUNT, value, filterCountry?, filterDepartment?}` (no filters = whole org) | `{affectedCount, costImpact:[{currencyCode, current, proposed, delta}], costImpactUsdDelta, recentlyRaised:[{employeeId, employeeCode, name, lastRaiseAt}]}` |
-| ⬜ `POST /api/bulk-raises` | preview request + `{excludedEmployeeIds:[]}` | `BulkRaiseRun` summary |
-| ⬜ `GET /api/bulk-raises` | `?page&size` | offset page of `BulkRaiseRun` |
+| ✅ `POST /api/bulk-raises/preview` | `{raiseType: PERCENT\|AMOUNT, value, filterCountry?, filterDepartment?}` (no filters = whole org) | `{affectedCount, costImpact:[{currencyCode, current, proposed, delta}], costImpactUsdDelta, recentlyRaised:[{employeeId, employeeCode, name, lastRaiseAt}]}` |
+| ✅ `POST /api/bulk-raises` | preview request + `{excludedEmployeeIds:[]}` | `BulkRaiseRun` summary |
+| ✅ `GET /api/bulk-raises` | `?page&size` | offset page of `BulkRaiseRun` |
 
 `BulkRaiseRun` = `{id, raiseType, raiseValue, filterCountry, filterDepartment,
 appliedCount, reviewCount, excludedCount, createdAt}`.
@@ -79,13 +80,13 @@ Preview is a dry-run of the same code path. Execution: per-item transactions
 (REQUIRES_NEW) — one bad record never blocks the cohort; guardrail parks per item.
 Excluded employees are simply omitted, never queued.
 
-## 5. Review queue ⬜
+## 5. Review queue ✅
 
 | Method & path | Request | Response `data` |
 |---|---|---|
-| ⬜ `GET /api/review-queue` | `?status=PENDING\|APPROVED\|REJECTED&page&size` | offset page of `ReviewItem` |
-| ⬜ `POST /api/review-queue/{id}/approve` | – | `Outcome` (applies via the standard change path; skips re-validation) |
-| ⬜ `POST /api/review-queue/{id}/reject` | – | `ReviewItem` (REJECTED, resolvedAt set) |
+| ✅ `GET /api/review-queue` | `?status=PENDING\|APPROVED\|REJECTED&page&size` | offset page of `ReviewItem` |
+| ✅ `POST /api/review-queue/{id}/approve` | – | `Outcome` (applies via the standard change path; skips re-validation) |
+| ✅ `POST /api/review-queue/{id}/reject` | – | `ReviewItem` (REJECTED, resolvedAt set) |
 
 `ReviewItem` = `{id, employeeId, employeeCode?, name?, bulkRaiseRunId, proposedOld,
 proposedNew, reason, status, createdAt, resolvedAt}`.
@@ -149,8 +150,8 @@ via current rates.
 | Employees CRUD + directory | ✅ |
 | Salary changes + guardrail parking | ✅ |
 | Employee hold/release | ⬜ |
-| Bulk raises + preview | ⬜ |
-| Review queue approve/reject | ⬜ |
+| Bulk raises + preview | ✅ |
+| Review queue approve/reject | ✅ |
 | Payroll runs + credits | ⬜ |
 | Currencies & settings | ⬜ |
 | Audit feed (keyset + run collapse) | ⬜ |

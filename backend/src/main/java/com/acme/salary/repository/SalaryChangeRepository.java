@@ -1,5 +1,6 @@
 package com.acme.salary.repository;
 
+import com.acme.salary.dto.RecentlyRaisedEmployee;
 import com.acme.salary.entities.SalaryChange;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -8,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -35,4 +37,23 @@ public interface SalaryChangeRepository extends JpaRepository<SalaryChange, Long
             """)
     Optional<SalaryChange> findEarliestChangeInWindow(@Param("employeeId") Long employeeId,
                                                       @Param("windowStart") LocalDateTime windowStart);
+
+    /**
+     * Bulk-raise preview: cohort employees who already received a change
+     * inside the recently-raised window, flagged for optional exclusion.
+     */
+    @Query("""
+            SELECT new com.acme.salary.dto.RecentlyRaisedEmployee(
+                e.id, e.employeeCode, e.name, MAX(c.createdAt))
+            FROM SalaryChange c JOIN Employee e ON e.id = c.employeeId
+            WHERE e.deleted = false
+              AND (:country IS NULL OR e.country = :country)
+              AND (:department IS NULL OR e.department = :department)
+              AND c.createdAt >= :cutoff
+            GROUP BY e.id, e.employeeCode, e.name
+            ORDER BY MAX(c.createdAt) DESC
+            """)
+    List<RecentlyRaisedEmployee> findRecentlyRaised(@Param("country") String country,
+                                                    @Param("department") String department,
+                                                    @Param("cutoff") LocalDateTime cutoff);
 }
