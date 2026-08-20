@@ -50,6 +50,7 @@ SOLID and clean LLD everywhere, always: constructor injection only, single-respo
 - **Validator pipeline** (pragmatic chain-of-responsibility) — guardrail as an ordered list of `RaiseValidator`s (amount sanity → cumulative-threshold → ...), each returning apply / park-for-review. Extensible where the domain actually extends.
 - Do NOT introduce CQRS, sagas, event sourcing, or service decomposition — single-service monolith by design; docs stay lean (only what's built).
 - Schema reference: `docs/DATABASE-DESIGN.md` (committed) — includes the usd_rate snapshot convention (local-per-USD, copied at insert, derived at read).
+- API reference: `docs/API-CONTRACT.md` (committed) — design-first contract for every endpoint, doubles as the build tracker (✅/⬜ per area); update the tracker as increments land. springdoc/Swagger mirrors it once frontend work starts. Future-work items (e.g. Excel-fed differentiated raises) live at the bottom of that doc.
 
 ## Deliverables checklist (assessment requirements)
 
