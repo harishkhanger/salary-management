@@ -26,7 +26,7 @@ app:
     recently-raised-days: 90
     poll-interval-ms: 2000
   analytics:
-    distribution-bucket-usd: 10000
+    distribution-bucket-usd: 50000
   payroll:
     current-month-processable-from-day: 25
     poll-interval-ms: 2000

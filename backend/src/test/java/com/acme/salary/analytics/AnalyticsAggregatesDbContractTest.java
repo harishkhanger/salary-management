@@ -48,7 +48,7 @@ class AnalyticsAggregatesDbContractTest {
 
     @Test
     void summaryCountsAndUsdNormalizedMonthlySpend() {
-        AnalyticsRepository.SummaryRow row = analyticsRepository.summarize();
+        AnalyticsRepository.SummaryRow row = analyticsRepository.summarize(null, null);
 
         assertThat(row.getHeadcount()).isEqualTo(5);
         assertThat(row.getOnHoldCount()).isEqualTo(1);
@@ -58,7 +58,7 @@ class AnalyticsAggregatesDbContractTest {
 
     @Test
     void spendByCountryGroupsAndNormalizes() {
-        List<AnalyticsRepository.CountryRow> rows = analyticsRepository.spendByCountry();
+        List<AnalyticsRepository.CountryRow> rows = analyticsRepository.spendByCountry(null, null);
 
         assertThat(rows).hasSize(2);
         var us = rows.stream().filter(r -> r.getCountry().equals("US")).findFirst().orElseThrow();
@@ -70,8 +70,8 @@ class AnalyticsAggregatesDbContractTest {
 
     @Test
     void departmentMedianHandlesOddAndEvenGroupSizes() {
-        var medians = analyticsRepository.medianByDepartment();
-        var averages = analyticsRepository.averageByDepartment();
+        var medians = analyticsRepository.medianByDepartment(null, null);
+        var averages = analyticsRepository.averageByDepartment(null, null);
 
         var engMedian = medians.stream()
                 .filter(r -> r.getDepartment().equals("Engineering")).findFirst().orElseThrow();
@@ -87,8 +87,17 @@ class AnalyticsAggregatesDbContractTest {
     }
 
     @Test
+    void filtersNarrowTheAggregates() {
+        AnalyticsRepository.SummaryRow engineering = analyticsRepository.summarize(null, "Engineering");
+        assertThat(engineering.getHeadcount()).isEqualTo(3);
+        AnalyticsRepository.SummaryRow india = analyticsRepository.summarize("India", null);
+        assertThat(india.getHeadcount()).isEqualTo(2);
+        assertThat(india.getTotalMonthlySpendUsd()).isEqualByComparingTo("12500.00");
+    }
+
+    @Test
     void distributionBucketsBySalaryBand() {
-        List<AnalyticsRepository.BucketRow> rows = analyticsRepository.salaryDistribution(50000);
+        List<AnalyticsRepository.BucketRow> rows = analyticsRepository.salaryDistribution(50000, null, null);
 
         // 50k -> [50k,100k); 60k -> [50k,100k); 100k x2 -> [100k,150k); 140k -> [100k,150k)
         assertThat(rows).hasSize(2);

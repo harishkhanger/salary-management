@@ -59,8 +59,10 @@ public interface AnalyticsRepository extends Repository<Employee, Long> {
             FROM employees e
             JOIN currency_rates c ON c.code = e.currency_code
             WHERE e.deleted = false
+              AND (:country IS NULL OR e.country = :country)
+              AND (:department IS NULL OR e.department = :department)
             """)
-    SummaryRow summarize();
+    SummaryRow summarize(@Param("country") String country, @Param("department") String department);
 
     @Query(nativeQuery = true, value = """
             SELECT e.country                                        AS country,
@@ -69,10 +71,12 @@ public interface AnalyticsRepository extends Repository<Employee, Long> {
             FROM employees e
             JOIN currency_rates c ON c.code = e.currency_code
             WHERE e.deleted = false
+              AND (:country IS NULL OR e.country = :country)
+              AND (:department IS NULL OR e.department = :department)
             GROUP BY e.country
             ORDER BY monthlySpendUsd DESC
             """)
-    List<CountryRow> spendByCountry();
+    List<CountryRow> spendByCountry(@Param("country") String country, @Param("department") String department);
 
     @Query(nativeQuery = true, value = """
             SELECT e.department                                 AS department,
@@ -81,10 +85,12 @@ public interface AnalyticsRepository extends Repository<Employee, Long> {
             FROM employees e
             JOIN currency_rates c ON c.code = e.currency_code
             WHERE e.deleted = false
+              AND (:country IS NULL OR e.country = :country)
+              AND (:department IS NULL OR e.department = :department)
             GROUP BY e.department
             ORDER BY e.department
             """)
-    List<DepartmentAvgRow> averageByDepartment();
+    List<DepartmentAvgRow> averageByDepartment(@Param("country") String country, @Param("department") String department);
 
     /**
      * Portable median (MySQL has no MEDIAN/percentile_cont): rank each salary
@@ -100,11 +106,13 @@ public interface AnalyticsRepository extends Repository<Employee, Long> {
                          COUNT(*) OVER (PARTITION BY e.department) AS cnt
                   FROM employees e
                   JOIN currency_rates c ON c.code = e.currency_code
-                  WHERE e.deleted = false) t
+                  WHERE e.deleted = false
+                    AND (:country IS NULL OR e.country = :country)
+                    AND (:department IS NULL OR e.department = :department)) t
             WHERE t.rn IN (FLOOR((t.cnt + 1) / 2.0), CEILING((t.cnt + 1) / 2.0))
             GROUP BY t.department
             """)
-    List<DepartmentMedianRow> medianByDepartment();
+    List<DepartmentMedianRow> medianByDepartment(@Param("country") String country, @Param("department") String department);
 
     @Query(nativeQuery = true, value = """
             SELECT FLOOR(e.annual_salary / c.usd_rate / :bucketUsd) * :bucketUsd AS bucketFloorUsd,
@@ -112,8 +120,12 @@ public interface AnalyticsRepository extends Repository<Employee, Long> {
             FROM employees e
             JOIN currency_rates c ON c.code = e.currency_code
             WHERE e.deleted = false
+              AND (:country IS NULL OR e.country = :country)
+              AND (:department IS NULL OR e.department = :department)
             GROUP BY bucketFloorUsd
             ORDER BY bucketFloorUsd
             """)
-    List<BucketRow> salaryDistribution(@Param("bucketUsd") int bucketUsd);
+    List<BucketRow> salaryDistribution(@Param("bucketUsd") int bucketUsd,
+                                       @Param("country") String country,
+                                       @Param("department") String department);
 }

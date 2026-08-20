@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3307/salary_mgmt?createDatabaseIfNotExist=true
+    url: jdbc:mysql://localhost:3307/salary_mgmt?createDatabaseIfNotExist=true&rewriteBatchedStatements=true
     username: ${DB_USER:salary}
     password: ${DB_PASSWORD:salary}
   jpa:
@@ -23,7 +23,7 @@ app:
     recently-raised-days: 90
     poll-interval-ms: 2000
   analytics:
-    distribution-bucket-usd: 10000
+    distribution-bucket-usd: 50000
   payroll:
     current-month-processable-from-day: 25
     poll-interval-ms: 2000

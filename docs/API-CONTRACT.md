@@ -151,13 +151,14 @@ Currencies have no numeric id: entityId 0, code inside changed_fields.
 
 | Method & path | Request | Response `data` |
 |---|---|---|
-| ✅ `GET /api/analytics/summary` | – | `{totalMonthlySpendUsd, headcount, onHoldCount, lastPayrollRun:{year, month, processedCount, createdAt}}` |
-| ✅ `GET /api/analytics/by-country` | – | `[{country, headcount, monthlySpendUsd}]` |
-| ✅ `GET /api/analytics/by-department` | – | `[{department, headcount, avgAnnualUsd, medianAnnualUsd}]` |
-| ✅ `GET /api/analytics/salary-distribution` | – | `{bucketUsd, buckets:[{bucketFloorUsd, bucketCeilingUsd, count}]}` (width via app.analytics.distribution-bucket-usd) |
+| ✅ `GET /api/analytics/summary` | `?country&department` | `{totalMonthlySpendUsd, headcount, onHoldCount, lastPayrollRun:{year, month, processedCount, createdAt}}` |
+| ✅ `GET /api/analytics/by-country` | `?country&department` | `[{country, headcount, monthlySpendUsd}]` |
+| ✅ `GET /api/analytics/by-department` | `?country&department` | `[{department, headcount, avgAnnualUsd, medianAnnualUsd}]` |
+| ✅ `GET /api/analytics/salary-distribution` | `?country&department&bucketUsd` (5000\|10000\|20000\|50000, default 50000) | `{bucketUsd, buckets:[{bucketFloorUsd, bucketCeilingUsd, count}]}` (width via app.analytics.distribution-bucket-usd) |
 
 All computed as SQL aggregates in the DB (never loading 10k rows), USD-normalized
-via current rates. Median uses the portable window-function form (ROW_NUMBER +
+via current rates. Optional country/department filters slice every endpoint;
+invalid bucketUsd -> 400 VALIDATION. Median uses the portable window-function form (ROW_NUMBER +
 COUNT OVER partition, average of the middle rows) — MySQL has no MEDIAN().
 
 ---

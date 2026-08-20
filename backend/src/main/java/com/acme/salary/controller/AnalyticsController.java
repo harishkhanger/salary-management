@@ -8,6 +8,7 @@ import com.acme.salary.service.AnalyticsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -20,22 +21,27 @@ public class AnalyticsController {
     private final AnalyticsService analyticsService;
 
     @GetMapping("/summary")
-    public Summary summary() {
-        return analyticsService.summary();
+    public Summary summary(@RequestParam(required = false) String country,
+                           @RequestParam(required = false) String department) {
+        return analyticsService.summary(country, department);
     }
 
     @GetMapping("/by-country")
-    public List<CountrySpend> byCountry() {
-        return analyticsService.byCountry();
+    public List<CountrySpend> byCountry(@RequestParam(required = false) String country,
+                                        @RequestParam(required = false) String department) {
+        return analyticsService.byCountry(country, department);
     }
 
     @GetMapping("/by-department")
-    public List<DepartmentStats> byDepartment() {
-        return analyticsService.byDepartment();
+    public List<DepartmentStats> byDepartment(@RequestParam(required = false) String country,
+                                              @RequestParam(required = false) String department) {
+        return analyticsService.byDepartment(country, department);
     }
 
     @GetMapping("/salary-distribution")
-    public Distribution salaryDistribution() {
-        return analyticsService.salaryDistribution();
+    public Distribution salaryDistribution(@RequestParam(required = false) String country,
+                                           @RequestParam(required = false) String department,
+                                           @RequestParam(required = false) Integer bucketUsd) {
+        return analyticsService.salaryDistribution(country, department, bucketUsd);
     }
 }
