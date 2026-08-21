@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ApiError, del, get, post, put } from '../api/client'
+import { del, get, post, put } from '../api/client'
+import { humanize } from '../api/errors'
 import type {
   AuditFeedItem,
   ChangeType,
@@ -53,7 +54,7 @@ export default function EmployeeDetailPage() {
       toast.success(updated.status === 'ON_HOLD' ? 'Salary on hold — payroll will skip this employee' : 'Hold released')
       setRefreshKey((k) => k + 1)
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : 'Failed')
+      toast.error(humanize(e, 'Failed'))
     } finally {
       setConfirmModal(null)
     }
@@ -65,7 +66,7 @@ export default function EmployeeDetailPage() {
       toast.success('Employee deleted (history preserved)')
       navigate('/employees')
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : 'Failed')
+      toast.error(humanize(e, 'Failed'))
     }
   }
 
@@ -227,7 +228,7 @@ function SalaryChangeModal({
       }
       setValue('')
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Failed')
+      setError(humanize(e, 'Failed'))
     } finally {
       setSubmitting(false)
     }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ApiError, get, post } from '../api/client'
+import { get, post } from '../api/client'
+import { errorCode, humanize } from '../api/errors'
 import type { Page, ReviewItem, ReviewStatus } from '../api/types'
 import Modal from '../components/Modal'
 import { useToast } from '../components/Toaster'
@@ -41,14 +42,9 @@ export default function ReviewQueuePage() {
       }
       load()
     } catch (e) {
-      if (e instanceof ApiError && e.code === 'STALE_PROPOSAL') {
-        toast.error(e.message)
-      } else if (e instanceof ApiError && e.code === 'ALREADY_RESOLVED') {
-        toast.error(e.message)
-        load()
-      } else {
-        toast.error(e instanceof ApiError ? e.message : 'Action failed')
-      }
+      toast.error(humanize(e, 'Action failed'))
+      // the queue has moved on under us: show the current truth
+      if (errorCode(e) === 'ALREADY_RESOLVED' || errorCode(e) === 'STALE_PROPOSAL') load()
     } finally {
       setActing(false)
       setConfirm(null)

@@ -4,6 +4,7 @@ import { get } from '../api/client'
 import type { AuditFeedItem, Page } from '../api/types'
 import { useToast } from '../components/Toaster'
 import { Pagination, Spinner, formatDateTime } from '../components/ui'
+import { actionTagClass, describeAudit } from '../components/auditText'
 
 /**
  * Global audit feed: numbered pages like every other list; bulk runs appear
@@ -162,7 +163,7 @@ function EntryRow({ item, compact }: { item: AuditFeedItem; compact?: boolean })
       <span className="feed-when">{formatDateTime(item.createdAt)}</span>
       <span className={`tag ${actionTagClass(item.action)}`}>{item.action.replaceAll('_', ' ')}</span>
       <span style={{ flex: 1 }}>
-        {describe(item)}
+        {describeAudit(item)}
         {!compact && item.entityType === 'EMPLOYEE' && (
           <>
             {' '}
@@ -239,32 +240,4 @@ function RunRow({ item }: { item: AuditFeedItem }) {
       )}
     </div>
   )
-}
-
-function actionTagClass(action: string): string {
-  if (action === 'RAISE_PARKED' || action === 'STATUS_CHANGED') return 'tag-orange'
-  if (action === 'DELETED' || action === 'RAISE_REJECTED') return 'tag-red'
-  if (action === 'SALARY_CHANGED' || action === 'RAISE_APPROVED' || action === 'SALARY_CREDITED') return 'tag-green'
-  if (action === 'CREATED') return 'tag-blue'
-  return 'tag-gray'
-}
-
-function describe(item: AuditFeedItem): string {
-  const subject = item.entityType === 'EMPLOYEE' ? `Employee #${item.entityId}` : item.entityType.replaceAll('_', ' ')
-  if (item.changedFields) {
-    const fields = Object.entries(item.changedFields)
-      .map(([field, change]) => {
-        if (change && typeof change === 'object' && 'old' in (change as object)) {
-          const c = change as { old: unknown; new: unknown }
-          return `${field}: ${c.old} → ${c.new}`
-        }
-        return `${field}: ${String(change)}`
-      })
-      .join(' · ')
-    return `${subject} — ${fields}`
-  }
-  if (item.refTable && item.refId) {
-    return `${subject} — ${item.refTable.replaceAll('_', ' ')} #${item.refId}`
-  }
-  return subject
 }

@@ -12,6 +12,7 @@ import PayrollPage from './pages/PayrollPage'
 import SettingsPage from './pages/SettingsPage'
 import AuditFeedPage from './pages/AuditFeedPage'
 import DashboardPage from './pages/DashboardPage'
+import HomePage from './pages/HomePage'
 
 export default function App() {
   return (
@@ -21,7 +22,8 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route element={<AppLayout />}>
-              <Route path="/" element={<DashboardPage />} />
+              <Route path="/" element={<HomePage />} />
+              <Route path="/analytics" element={<DashboardPage />} />
               <Route path="/employees" element={<EmployeeDirectoryPage />} />
               <Route path="/employees/new" element={<EmployeeFormPage />} />
               <Route path="/employees/:id" element={<EmployeeDetailPage />} />

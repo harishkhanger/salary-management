@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
-import { ApiError } from '../api/client'
+import { errorCode, humanize } from '../api/errors'
 import { Field } from '../components/ui'
 
 export default function LoginPage() {
@@ -29,7 +29,7 @@ export default function LoginPage() {
       await login(username, password)
       navigate('/')
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Login failed')
+      setError(errorCode(err) === 'UNAUTHENTICATED' ? 'Wrong username or password.' : humanize(err, 'Login failed'))
     } finally {
       setSubmitting(false)
     }

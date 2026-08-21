@@ -1,41 +1,109 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ApiError, get, post } from '../api/client'
-import type { Page, PayrollRun } from '../api/types'
+import { get, post } from '../api/client'
+import { humanize } from '../api/errors'
+import type { Page, PayrollMonth, PayrollRun } from '../api/types'
+import Modal from '../components/Modal'
 import { useToast } from '../components/Toaster'
-import { Field, Pagination, formatDateTime } from '../components/ui'
-import { RunStatusTag } from './BulkRaisesPage'
+import { Pagination, Spinner, formatDate, formatDateTime } from '../components/ui'
 
 const POLL_MS = 1500
-const MONTHS = [
+const MONTHS_SHOWN = 13
+
+export const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
 ]
 
-/** Defaults to the previous month — always processable per the month rule. */
-function previousMonth(): { year: number; month: number } {
-  const now = new Date()
-  const month = now.getMonth() === 0 ? 12 : now.getMonth()
-  const year = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()
-  return { year, month }
+export const monthLabel = (year: number, month: number) => `${MONTHS[month - 1]} ${year}`
+export const plural = (n: number, noun: string) => `${n.toLocaleString()} ${noun}${n === 1 ? '' : 's'}`
+
+/** The one sentence that tells you where a month stands. Shared with the home screen. */
+export function payrollSentence(m: PayrollMonth): string {
+  switch (m.state) {
+    case 'PAID':
+      return `${plural(m.creditedCount, 'employee')} credited${m.lastPaidAt ? ` · last payment ${formatDate(m.lastPaidAt)}` : ''}${
+        m.heldCount > 0 ? ` · ${m.heldCount} on hold` : ''
+      }`
+    case 'PARTIAL':
+      return `${m.creditedCount.toLocaleString()} paid${m.lastPaidAt ? ` on ${formatDate(m.lastPaidAt)}` : ''} · ${plural(
+        m.unpaidCount,
+        'employee',
+      )} still unpaid (joined since, or hold released)`
+    case 'DUE':
+      return `Not paid yet · ${plural(m.unpaidCount, 'employee')} to pay${
+        m.heldCount > 0 ? ` (${m.heldCount} on hold will be skipped)` : ''
+      }`
+    case 'OPENS_LATER':
+      return `Can be paid from ${m.opensOn ? formatDate(m.opensOn) : 'the 25th'}`
+    case 'PROCESSING':
+      return 'Paying now…'
+  }
+}
+
+/** What the button will do — or null when there is nothing to do. */
+export function payrollAction(m: PayrollMonth): string | null {
+  if (m.state === 'PARTIAL') return `Pay ${plural(m.unpaidCount, 'unpaid employee')}`
+  if (m.state === 'DUE') return `Pay ${MONTHS[m.month - 1]} · ${plural(m.unpaidCount, 'employee')}`
+  return null
+}
+
+function stateTag(state: PayrollMonth['state']) {
+  switch (state) {
+    case 'PAID':
+      return <span className="tag tag-green">Paid</span>
+    case 'PARTIAL':
+      return <span className="tag tag-orange">Partially paid</span>
+    case 'DUE':
+      return <span className="tag tag-blue">Due</span>
+    case 'OPENS_LATER':
+      return <span className="tag tag-gray">Not yet</span>
+    case 'PROCESSING':
+      return <span className="tag tag-blue">Paying…</span>
+  }
+}
+
+/** "April 2026: credited 198 employees. 9,603 already paid and 4 on hold were skipped." */
+export function runOutcome(run: PayrollRun): string {
+  const skipped: string[] = []
+  if (run.alreadyProcessedCount > 0) skipped.push(`${run.alreadyProcessedCount.toLocaleString()} already paid`)
+  if (run.skippedHeldCount > 0) skipped.push(`${run.skippedHeldCount.toLocaleString()} on hold`)
+  const tail = skipped.length ? ` ${skipped.join(' and ')} ${skipped.length > 1 || !skipped[0].endsWith('paid') ? 'were' : 'were'} skipped.` : ''
+  if (run.processedCount === 0) return `${monthLabel(run.year, run.month)}: nothing to credit.${tail}`
+  return `${monthLabel(run.year, run.month)}: credited ${plural(run.processedCount, 'employee')}.${tail}`
 }
 
 export default function PayrollPage() {
   const toast = useToast()
-  const defaults = previousMonth()
-  const [year, setYear] = useState(defaults.year)
-  const [month, setMonth] = useState(defaults.month)
+  const [months, setMonths] = useState<PayrollMonth[] | null>(null)
+  const [confirm, setConfirm] = useState<PayrollMonth | null>(null)
   const [queueing, setQueueing] = useState(false)
   const [activeRun, setActiveRun] = useState<PayrollRun | null>(null)
+  const [result, setResult] = useState<PayrollRun | null>(null)
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const [runs, setRuns] = useState<Page<PayrollRun> | null>(null)
-  const [runsPage, setRunsPage] = useState(0)
+  const [history, setHistory] = useState<Page<PayrollRun> | null>(null)
+  const [historyPage, setHistoryPage] = useState(0)
 
-  const loadRuns = useCallback(() => {
-    get<Page<PayrollRun>>('/payroll/runs', { page: runsPage, size: 10 }).then(setRuns)
-  }, [runsPage])
+  const loadMonths = useCallback(() => {
+    get<PayrollMonth[]>('/payroll/months', { months: MONTHS_SHOWN })
+      .then((rows) => {
+        setMonths(rows)
+        // a run already in flight (e.g. after a page reload) is picked up and followed
+        const inFlight = rows.find((m) => m.activeRunId)
+        if (inFlight?.activeRunId) {
+          setActiveRun((prev) => prev ?? ({ id: inFlight.activeRunId, status: 'QUEUED' } as PayrollRun))
+        }
+      })
+      .catch((e) => toast.error(humanize(e)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
-  useEffect(loadRuns, [loadRuns])
+  const loadHistory = useCallback(() => {
+    get<Page<PayrollRun>>('/payroll/runs', { page: historyPage, size: 10 }).then(setHistory)
+  }, [historyPage])
+
+  useEffect(loadMonths, [loadMonths])
+  useEffect(loadHistory, [loadHistory])
 
   useEffect(() => {
     if (!activeRun || activeRun.status === 'COMPLETED') return
@@ -43,10 +111,10 @@ export default function PayrollPage() {
       get<PayrollRun>(`/payroll/runs/${activeRun.id}`).then((run) => {
         setActiveRun(run)
         if (run.status === 'COMPLETED') {
-          toast.success(
-            `Run #${run.id} complete: ${run.processedCount} paid, ${run.skippedHeldCount} on hold, ${run.alreadyProcessedCount} already processed`,
-          )
-          loadRuns()
+          setResult(run)
+          toast.success(runOutcome(run))
+          loadMonths()
+          loadHistory()
         }
       })
     }, POLL_MS)
@@ -56,21 +124,22 @@ export default function PayrollPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeRun?.id, activeRun?.status])
 
-  const process = async () => {
+  const pay = async (m: PayrollMonth) => {
     setQueueing(true)
     try {
-      const run = await post<PayrollRun>('/payroll/runs', { year, month })
+      const run = await post<PayrollRun>('/payroll/runs', { year: m.year, month: m.month })
+      setResult(null)
       setActiveRun(run)
-      loadRuns()
-      toast.info(`Run #${run.id} queued — processing in the background`)
+      setConfirm(null)
+      loadMonths()
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : 'Could not queue the run')
+      toast.error(humanize(e, "Couldn't start paying this month"))
     } finally {
       setQueueing(false)
     }
   }
 
-  const years = Array.from({ length: 4 }, (_, i) => new Date().getFullYear() - i)
+  const now = new Date()
 
   return (
     <div className="stack">
@@ -78,148 +147,146 @@ export default function PayrollPage() {
         <div>
           <h2 className="page-title">Payroll</h2>
           <div className="page-subtitle">
-            Process a month for the whole org — idempotent, so re-running never double-pays
+            Pay the organisation month by month. Paying a month twice is safe — anyone already paid is skipped.
           </div>
         </div>
       </div>
 
-      <div className="card">
-        <h3 style={{ marginBottom: 14 }}>Process a month</h3>
-        <div className="toolbar">
-          <Field label="Month">
-            <select className="select" style={{ width: 150 }} value={month} onChange={(e) => setMonth(Number(e.target.value))}>
-              {MONTHS.map((m, i) => (
-                <option key={m} value={i + 1}>
-                  {m}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Year">
-            <select className="select" style={{ width: 110 }} value={year} onChange={(e) => setYear(Number(e.target.value))}>
-              {years.map((y) => (
-                <option key={y} value={y}>
-                  {y}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <div className="field">
-            <span className="field-label">&nbsp;</span>
-            <button className="btn btn-primary" onClick={process} disabled={queueing}>
-              {queueing ? 'Queueing…' : 'Process payroll'}
-            </button>
-          </div>
-        </div>
-        <p className="muted" style={{ margin: 0 }}>
-          Past months are always processable. The current month opens on the 25th. Held employees are skipped.
-        </p>
-      </div>
-
-      {activeRun && (
-        <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
-            <h3>
-              Run #{activeRun.id} — {MONTHS[activeRun.month - 1]} {activeRun.year}{' '}
-              <RunStatusTag status={activeRun.status} />
-            </h3>
-            {activeRun.status === 'COMPLETED' && (
-              <button className="btn btn-sm" onClick={() => setActiveRun(null)}>
-                Dismiss
-              </button>
-            )}
-          </div>
-          <div
-            className="progress-track"
-            style={{ marginBottom: 14, opacity: activeRun.status === 'QUEUED' ? 0.6 : 1 }}
-          >
-            <div
-              className="progress-fill"
-              style={{
-                width:
-                  activeRun.status === 'COMPLETED'
-                    ? '100%'
-                    : `${Math.min(96, 5 + (activeRun.processedCount + activeRun.alreadyProcessedCount) * 0.5)}%`,
-              }}
-            />
-          </div>
-          <div className="stat-row">
-            <div className="stat">
-              <div className="stat-label">Credits created</div>
-              <div className="stat-value" style={{ color: 'var(--success)' }}>
-                {activeRun.processedCount.toLocaleString()}
-              </div>
-            </div>
-            <div className="stat">
-              <div className="stat-label">Skipped (on hold)</div>
-              <div className="stat-value" style={{ color: 'var(--warn)' }}>
-                {activeRun.skippedHeldCount.toLocaleString()}
-              </div>
-            </div>
-            <div className="stat">
-              <div className="stat-label">Already processed</div>
-              <div className="stat-value">{activeRun.alreadyProcessedCount.toLocaleString()}</div>
-            </div>
-          </div>
+      {result && (
+        <div className="alert alert-info" style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+          <span>{runOutcome(result)}</span>
+          <button className="btn btn-sm" onClick={() => setResult(null)}>
+            Dismiss
+          </button>
         </div>
       )}
 
       <div className="card">
-        <h3 style={{ marginBottom: 14 }}>Run history</h3>
+        {!months ? (
+          <Spinner />
+        ) : (
+          months.map((m) => {
+            const isCurrent = m.year === now.getFullYear() && m.month === now.getMonth() + 1
+            const running = activeRun && activeRun.status !== 'COMPLETED' && activeRun.year === m.year && activeRun.month === m.month
+            const action = payrollAction(m)
+            return (
+              <div key={`${m.year}-${m.month}`} className={`month-row${isCurrent ? ' current' : ''}`}>
+                <span className="month-name">{monthLabel(m.year, m.month)}</span>
+                <span>{stateTag(m.state)}</span>
+                <span className="month-sentence">
+                  {running ? (
+                    <>
+                      <div className="progress-track" style={{ marginBottom: 6, maxWidth: 320 }}>
+                        <div
+                          className="progress-fill"
+                          style={{
+                            width: `${Math.min(96, 5 + (activeRun.processedCount + activeRun.alreadyProcessedCount) * 0.5)}%`,
+                          }}
+                        />
+                      </div>
+                      Paying now — {plural(activeRun.processedCount, 'employee')} credited so far
+                    </>
+                  ) : (
+                    payrollSentence(m)
+                  )}
+                </span>
+                <span>
+                  {action && !running && (
+                    <button className="btn btn-primary btn-sm" onClick={() => setConfirm(m)}>
+                      {action}
+                    </button>
+                  )}
+                </span>
+              </div>
+            )
+          })
+        )}
+      </div>
+
+      <div className="card">
+        <h3 style={{ marginBottom: 14 }}>What happened</h3>
         <div className="table-wrap">
           <table className="table">
             <thead>
               <tr>
-                <th>Run</th>
-                <th>Period</th>
-                <th>Scope</th>
-                <th>Status</th>
-                <th className="num">Paid</th>
-                <th className="num">Held</th>
-                <th className="num">Already done</th>
+                <th>When</th>
+                <th>Month</th>
+                <th>Outcome</th>
                 <th>By</th>
-                <th>Started</th>
               </tr>
             </thead>
             <tbody>
-              {!runs || runs.content.length === 0 ? (
+              {!history || history.content.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="table-empty">
-                    No payroll runs yet
+                  <td colSpan={4} className="table-empty">
+                    No payroll has been paid yet
                   </td>
                 </tr>
               ) : (
-                runs.content.map((run) => (
+                history.content.map((run) => (
                   <tr key={run.id}>
-                    <td style={{ fontWeight: 600 }}>#{run.id}</td>
-                    <td>
-                      {MONTHS[run.month - 1]} {run.year}
+                    <td className="muted" style={{ whiteSpace: 'nowrap' }}>
+                      {formatDateTime(run.createdAt)}
                     </td>
-                    <td className="muted">{run.employeeId ? `Employee #${run.employeeId}` : 'Whole org'}</td>
-                    <td>
-                      <RunStatusTag status={run.status} />
+                    <td style={{ fontWeight: 600 }}>
+                      {monthLabel(run.year, run.month)}
+                      {run.employeeId && <span className="muted"> · one employee</span>}
                     </td>
-                    <td className="num">{run.processedCount}</td>
-                    <td className="num">{run.skippedHeldCount}</td>
-                    <td className="num">{run.alreadyProcessedCount}</td>
+                    <td>
+                      {run.status !== 'COMPLETED'
+                        ? 'Paying now…'
+                        : `${plural(run.processedCount, 'employee')} credited · ${run.skippedHeldCount} on hold · ${run.alreadyProcessedCount.toLocaleString()} already paid`}
+                    </td>
                     <td>{run.initiatedBy}</td>
-                    <td className="muted">{formatDateTime(run.createdAt)}</td>
                   </tr>
                 ))
               )}
             </tbody>
           </table>
         </div>
-        {runs && (
+        {history && history.totalElements > 0 && (
           <Pagination
-            page={runsPage}
-            totalPages={runs.totalPages}
-            totalElements={runs.totalElements}
-            noun="runs"
-            onChange={setRunsPage}
+            page={historyPage}
+            totalPages={history.totalPages}
+            totalElements={history.totalElements}
+            noun="payments"
+            onChange={setHistoryPage}
           />
         )}
       </div>
+
+      <Modal
+        title={confirm ? `Pay ${monthLabel(confirm.year, confirm.month)}` : ''}
+        open={confirm !== null}
+        onClose={() => setConfirm(null)}
+        footer={
+          confirm && (
+            <>
+              <button className="btn" onClick={() => setConfirm(null)} disabled={queueing}>
+                Cancel
+              </button>
+              <button className="btn btn-primary" onClick={() => pay(confirm)} disabled={queueing}>
+                {queueing ? 'Starting…' : payrollAction(confirm)}
+              </button>
+            </>
+          )
+        }
+      >
+        {confirm && (
+          <p className="lead">
+            This will credit <strong>{plural(confirm.unpaidCount, 'employee')}</strong> for{' '}
+            {monthLabel(confirm.year, confirm.month)} — one month of each person's annual salary, in their own
+            currency at today's exchange rate.
+            {confirm.creditedCount > 0 && (
+              <>
+                {' '}
+                The {confirm.creditedCount.toLocaleString()} already paid will not be paid again.
+              </>
+            )}
+            {confirm.heldCount > 0 && <> Anyone on salary hold is skipped.</>}
+          </p>
+        )}
+      </Modal>
     </div>
   )
 }

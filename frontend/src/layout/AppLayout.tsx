@@ -4,6 +4,7 @@ import { Spinner } from '../components/ui'
 import {
   AuditIcon,
   ChartIcon,
+  HomeIcon,
   CoinsIcon,
   GearIcon,
   LogoutIcon,
@@ -13,11 +14,12 @@ import {
 } from '../components/icons'
 
 const nav = [
-  { path: '/', label: 'Dashboard', icon: <ChartIcon /> },
+  { path: '/', label: 'Home', icon: <HomeIcon /> },
   { path: '/employees', label: 'Employees', icon: <TeamIcon /> },
   { path: '/bulk-raises', label: 'Bulk raises', icon: <RiseIcon /> },
   { path: '/review-queue', label: 'Review queue', icon: <QueueIcon /> },
   { path: '/payroll', label: 'Payroll', icon: <CoinsIcon /> },
+  { path: '/analytics', label: 'Analytics', icon: <ChartIcon /> },
   { path: '/audit', label: 'Audit feed', icon: <AuditIcon /> },
   { path: '/settings', label: 'Settings', icon: <GearIcon /> },
 ]

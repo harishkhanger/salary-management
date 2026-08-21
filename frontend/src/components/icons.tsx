@@ -8,6 +8,12 @@ const base = {
   strokeLinejoin: 'round',
 } as const
 
+export const HomeIcon = () => (
+  <svg viewBox="0 0 24 24" {...base}>
+    <path d="M3.5 11.5 12 4l8.5 7.5M6 10v9.5h4.5v-5h3v5H18V10" />
+  </svg>
+)
+
 export const ChartIcon = () => (
   <svg viewBox="0 0 24 24" {...base}>
     <path d="M4 20V10M10 20V4M16 20v-7M21 20H3" />

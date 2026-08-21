@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ApiError, get, post, put } from '../api/client'
+import { get, post, put } from '../api/client'
+import { humanize } from '../api/errors'
 import type { CurrencyRate, Employee } from '../api/types'
 import { useToast } from '../components/Toaster'
 import { Field, Spinner } from '../components/ui'
@@ -94,7 +95,7 @@ export default function EmployeeFormPage() {
         navigate(`/employees/${created.id}`)
       }
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Something went wrong')
+      setError(humanize(err, 'Something went wrong'))
     } finally {
       setSubmitting(false)
     }

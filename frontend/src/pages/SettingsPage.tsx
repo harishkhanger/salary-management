@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ApiError, get, put } from '../api/client'
+import { get, put } from '../api/client'
+import { humanize } from '../api/errors'
 import type { CurrencyRate, Settings } from '../api/types'
 import { useToast } from '../components/Toaster'
 import { Field, formatDateTime } from '../components/ui'
@@ -33,7 +34,7 @@ export default function SettingsPage() {
       setThreshold(String(saved.raiseThresholdPercent))
       toast.success(`Guardrail threshold is now ${saved.raiseThresholdPercent}% — applies to the next change`)
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : 'Could not save')
+      toast.error(humanize(e, 'Could not save'))
     } finally {
       setSavingThreshold(false)
     }
@@ -47,7 +48,7 @@ export default function SettingsPage() {
       setDrafts((d) => ({ ...d, [code]: String(saved.usdRate) }))
       toast.success(`${code} rate updated — affects future credits and analytics only`)
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : 'Could not save')
+      toast.error(humanize(e, 'Could not save'))
     } finally {
       setSavingCode(null)
     }
