@@ -18,6 +18,9 @@ export default function BulkRaisesPage() {
   // --- preview & execution state ---
   const [preview, setPreview] = useState<BulkRaisePreview | null>(null)
   const [excluded, setExcluded] = useState<Set<number>>(new Set())
+  // the recently-raised list can run to thousands: paged + searchable client-side
+  const [excludePage, setExcludePage] = useState(0)
+  const [excludeSearch, setExcludeSearch] = useState('')
   const [previewing, setPreviewing] = useState(false)
   const [activeRun, setActiveRun] = useState<BulkRaiseRun | null>(null)
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -63,6 +66,8 @@ export default function BulkRaisesPage() {
     setPreviewing(true)
     setPreview(null)
     setExcluded(new Set())
+    setExcludePage(0)
+    setExcludeSearch('')
     try {
       setPreview(await post<BulkRaisePreview>('/bulk-raises/preview', requestBody()))
     } catch (e) {
@@ -93,6 +98,22 @@ export default function BulkRaisesPage() {
     else next.add(id)
     setExcluded(next)
   }
+
+  const excludeAll = (ids: number[]) => setExcluded(new Set([...excluded, ...ids]))
+  const clearExcluded = () => setExcluded(new Set())
+
+  const EXCLUDE_PAGE_SIZE = 25
+  const needle = excludeSearch.trim().toLowerCase()
+  const recentlyRaisedMatches = (preview?.recentlyRaised ?? []).filter(
+    (r) => !needle || r.name.toLowerCase().includes(needle) || r.employeeCode.toLowerCase().includes(needle),
+  )
+  const excludeTotalPages = Math.max(1, Math.ceil(recentlyRaisedMatches.length / EXCLUDE_PAGE_SIZE))
+  const visibleRecentlyRaised = recentlyRaisedMatches.slice(
+    excludePage * EXCLUDE_PAGE_SIZE,
+    (excludePage + 1) * EXCLUDE_PAGE_SIZE,
+  )
+  const visibleAllExcluded =
+    visibleRecentlyRaised.length > 0 && visibleRecentlyRaised.every((r) => excluded.has(r.employeeId))
 
   const progressPct = (run: BulkRaiseRun) => {
     if (run.status === 'COMPLETED') return 100
@@ -212,27 +233,75 @@ export default function BulkRaisesPage() {
           {preview.recentlyRaised.length > 0 && (
             <div style={{ marginTop: 16 }}>
               <div className="alert alert-warn">
-                These employees already received a raise recently — tick to exclude them from this run.
+                {preview.recentlyRaised.length.toLocaleString()} of these employees already received a raise
+                recently — tick to exclude them from this run.
               </div>
-              {preview.recentlyRaised.map((r) => (
-                <label key={r.employeeId} className="check-row">
+              <div className="filters-bar" style={{ marginTop: 10, justifyContent: 'flex-start' }}>
+                <input
+                  className="input"
+                  placeholder="Search name or code"
+                  value={excludeSearch}
+                  onChange={(e) => {
+                    setExcludeSearch(e.target.value)
+                    setExcludePage(0)
+                  }}
+                  style={{ width: 220 }}
+                />
+                <label className="check-row" style={{ padding: 0, border: 0 }}>
                   <input
                     type="checkbox"
-                    checked={excluded.has(r.employeeId)}
-                    onChange={() => toggleExcluded(r.employeeId)}
+                    checked={visibleAllExcluded}
+                    onChange={() =>
+                      visibleAllExcluded
+                        ? setExcluded(new Set([...excluded].filter((id) => !visibleRecentlyRaised.some((r) => r.employeeId === id))))
+                        : excludeAll(visibleRecentlyRaised.map((r) => r.employeeId))
+                    }
                   />
-                  <strong>{r.name}</strong>
-                  <span className="muted">
-                    {r.employeeCode} · last raise {formatDateTime(r.lastRaiseAt)}
-                  </span>
+                  <span className="muted">This page</span>
                 </label>
-              ))}
+                <button
+                  className="btn btn-sm"
+                  onClick={() => excludeAll(recentlyRaisedMatches.map((r) => r.employeeId))}
+                >
+                  Exclude all {recentlyRaisedMatches.length.toLocaleString()}
+                  {needle ? ' matching' : ''}
+                </button>
+                {excluded.size > 0 && (
+                  <button className="btn btn-sm" onClick={clearExcluded}>
+                    Clear ({excluded.size.toLocaleString()} excluded)
+                  </button>
+                )}
+              </div>
+              {visibleRecentlyRaised.length === 0 ? (
+                <div className="table-empty">No recently-raised employees match “{excludeSearch}”</div>
+              ) : (
+                visibleRecentlyRaised.map((r) => (
+                  <label key={r.employeeId} className="check-row">
+                    <input
+                      type="checkbox"
+                      checked={excluded.has(r.employeeId)}
+                      onChange={() => toggleExcluded(r.employeeId)}
+                    />
+                    <strong>{r.name}</strong>
+                    <span className="muted">
+                      {r.employeeCode} · last raise {formatDateTime(r.lastRaiseAt)}
+                    </span>
+                  </label>
+                ))
+              )}
+              <Pagination
+                page={excludePage}
+                totalPages={excludeTotalPages}
+                totalElements={recentlyRaisedMatches.length}
+                noun="recently raised"
+                onChange={setExcludePage}
+              />
             </div>
           )}
 
           <div style={{ marginTop: 18, display: 'flex', gap: 10 }}>
             <button className="btn btn-primary" onClick={execute}>
-              Execute raise{excluded.size > 0 ? ` (excluding ${excluded.size})` : ''}
+              Execute raise{excluded.size > 0 ? ` (excluding ${excluded.size.toLocaleString()})` : ''}
             </button>
             <button className="btn" onClick={() => setPreview(null)}>
               Discard
