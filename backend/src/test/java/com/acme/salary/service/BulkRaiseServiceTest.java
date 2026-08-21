@@ -1,6 +1,5 @@
 package com.acme.salary.service;
 
-import com.acme.salary.config.BulkRaiseProperties;
 import com.acme.salary.config.JobProperties;
 import com.acme.salary.config.PaginationProperties;
 import com.acme.salary.dto.request.BulkRaiseExecuteRequest;
@@ -8,7 +7,9 @@ import com.acme.salary.dto.request.BulkRaisePreviewRequest;
 import com.acme.salary.dto.response.BulkRaisePreviewResponse;
 import com.acme.salary.dto.response.BulkRaiseRunResponse;
 import com.acme.salary.dto.CurrencyCohortAggregate;
-import com.acme.salary.dto.response.RecentlyRaisedEmployee;
+import com.acme.salary.dto.OverThresholdAggregate;
+import com.acme.salary.entities.OrgSettings;
+import com.acme.salary.repository.OrgSettingsRepository;
 import com.acme.salary.dto.response.SalaryChangeOutcome;
 import com.acme.salary.entities.BulkRaiseRun;
 import com.acme.salary.entities.CurrencyRate;
@@ -65,6 +66,9 @@ class BulkRaiseServiceTest {
     private BulkRaiseItemProcessor itemProcessor;
 
     @Mock
+    private OrgSettingsRepository orgSettingsRepository;
+
+    @Mock
     private org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     private BulkRaiseService service;
@@ -73,7 +77,7 @@ class BulkRaiseServiceTest {
     void setUp() {
         service = new BulkRaiseService(employeeRepository, salaryChangeRepository,
                 raiseReviewItemRepository, currencyRateRepository, bulkRaiseRunRepository,
-                itemProcessor, new BulkRaiseProperties(90), new JobProperties(100),
+                itemProcessor, orgSettingsRepository, new JobProperties(100),
                 new PaginationProperties(100), new ObjectMapper(), eventPublisher, FIXED);
     }
 
@@ -103,6 +107,12 @@ class BulkRaiseServiceTest {
                 .build();
     }
 
+    private void stubThreshold(String percent) {
+        OrgSettings settings = org.mockito.Mockito.mock(OrgSettings.class);
+        when(settings.getRaiseThresholdPercent()).thenReturn(new BigDecimal(percent));
+        when(orgSettingsRepository.findById(1L)).thenReturn(java.util.Optional.of(settings));
+    }
+
     // --- preview ---
 
     @Test
@@ -112,8 +122,10 @@ class BulkRaiseServiceTest {
                 new CurrencyCohortAggregate("USD", 1L, new BigDecimal("100000.00"))));
         when(currencyRateRepository.findAll()).thenReturn(List.of(
                 rate("INR", "80.000000"), rate("USD", "1.000000")));
-        when(salaryChangeRepository.findRecentlyRaised(eq("India"), isNull(), any(LocalDateTime.class)))
-                .thenReturn(List.of(new RecentlyRaisedEmployee(7L, "EMP-00007", "Asha Rao",
+        stubThreshold("30");
+        when(salaryChangeRepository.findOverThreshold(eq("India"), isNull(), eq(new BigDecimal("30"))))
+                .thenReturn(List.of(new OverThresholdAggregate(7L, "EMP-00007", "Asha Rao",
+                        new BigDecimal("140000.00"), new BigDecimal("100000.00"),
                         LocalDateTime.now(FIXED).minusDays(30))));
 
         BulkRaisePreviewResponse preview = service.preview(
@@ -126,7 +138,9 @@ class BulkRaiseServiceTest {
         assertThat(inr.delta()).isEqualByComparingTo("200000.00");
         // USD delta: 200000/80 + 10000/1 = 12500
         assertThat(preview.costImpactUsdDelta()).isEqualByComparingTo("12500.00");
-        assertThat(preview.recentlyRaised()).hasSize(1);
+        // flagged: 100k -> 140k since first change = +40% total, over the 30% threshold
+        assertThat(preview.overThreshold()).hasSize(1);
+        assertThat(preview.overThreshold().getFirst().totalRaisePercent()).isEqualByComparingTo("40.00");
     }
 
     @Test
@@ -134,7 +148,8 @@ class BulkRaiseServiceTest {
         when(employeeRepository.aggregateCohortByCurrency(null, "Sales")).thenReturn(List.of(
                 new CurrencyCohortAggregate("USD", 4L, new BigDecimal("400000.00"))));
         when(currencyRateRepository.findAll()).thenReturn(List.of(rate("USD", "1.000000")));
-        when(salaryChangeRepository.findRecentlyRaised(isNull(), eq("Sales"), any(LocalDateTime.class)))
+        stubThreshold("30");
+        when(salaryChangeRepository.findOverThreshold(isNull(), eq("Sales"), any(BigDecimal.class)))
                 .thenReturn(List.of());
 
         BulkRaisePreviewResponse preview = service.preview(

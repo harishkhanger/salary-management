@@ -20,7 +20,6 @@ app:
   pagination:
     max-page-size: 100
   bulk-raise:
-    recently-raised-days: 90
     poll-interval-ms: 2000
   analytics:
     distribution-bucket-usd: 50000

@@ -1,6 +1,5 @@
 package com.acme.salary.service;
 
-import com.acme.salary.config.BulkRaiseProperties;
 import com.acme.salary.config.JobProperties;
 import com.acme.salary.config.PaginationProperties;
 import com.acme.salary.dto.request.BulkRaiseExecuteRequest;
@@ -9,8 +8,9 @@ import com.acme.salary.dto.response.BulkRaisePreviewResponse;
 import com.acme.salary.dto.response.BulkRaisePreviewResponse.CostImpactEntry;
 import com.acme.salary.dto.response.BulkRaiseRunResponse;
 import com.acme.salary.dto.CurrencyCohortAggregate;
+import com.acme.salary.dto.OverThresholdAggregate;
 import com.acme.salary.dto.response.PageResponse;
-import com.acme.salary.dto.response.RecentlyRaisedEmployee;
+import com.acme.salary.dto.response.OverThresholdEmployee;
 import com.acme.salary.dto.response.SalaryChangeOutcome;
 import com.acme.salary.entities.BulkRaiseRun;
 import com.acme.salary.entities.CurrencyRate;
@@ -24,6 +24,7 @@ import com.acme.salary.exception.NotFoundException;
 import com.acme.salary.repository.BulkRaiseRunRepository;
 import com.acme.salary.repository.CurrencyRateRepository;
 import com.acme.salary.repository.EmployeeRepository;
+import com.acme.salary.repository.OrgSettingsRepository;
 import com.acme.salary.repository.RaiseReviewItemRepository;
 import com.acme.salary.repository.SalaryChangeRepository;
 import tools.jackson.core.JacksonException;
@@ -68,7 +69,7 @@ public class BulkRaiseService {
     private final CurrencyRateRepository currencyRateRepository;
     private final BulkRaiseRunRepository bulkRaiseRunRepository;
     private final BulkRaiseItemProcessor itemProcessor;
-    private final BulkRaiseProperties properties;
+    private final OrgSettingsRepository orgSettingsRepository;
     private final JobProperties jobProperties;
     private final PaginationProperties paginationProperties;
     private final ObjectMapper objectMapper;
@@ -77,7 +78,8 @@ public class BulkRaiseService {
 
     /**
      * Dry run: cost impact from per-currency SQL aggregates (10k rows are
-     * never loaded), plus recently-raised employees for optional exclusion.
+     * never loaded), plus employees already over the guardrail threshold
+     * across their whole history, flagged for optional exclusion.
      */
     public BulkRaisePreviewResponse preview(BulkRaisePreviewRequest request) {
         List<CurrencyCohortAggregate> aggregates = employeeRepository
@@ -100,11 +102,14 @@ public class BulkRaiseService {
                     2, RoundingMode.HALF_UP));
         }
 
-        List<RecentlyRaisedEmployee> recentlyRaised = salaryChangeRepository.findRecentlyRaised(
-                blankToNull(request.filterCountry()), blankToNull(request.filterDepartment()),
-                LocalDateTime.now(clock).minusDays(properties.recentlyRaisedDays()));
+        BigDecimal threshold = orgSettingsRepository.findById(1L)
+                .orElseThrow(() -> new IllegalStateException("org_settings row missing"))
+                .getRaiseThresholdPercent();
+        List<OverThresholdEmployee> overThreshold = salaryChangeRepository.findOverThreshold(
+                        blankToNull(request.filterCountry()), blankToNull(request.filterDepartment()), threshold)
+                .stream().map(this::toOverThreshold).toList();
 
-        return new BulkRaisePreviewResponse(affectedCount, costImpact, usdDelta, recentlyRaised);
+        return new BulkRaisePreviewResponse(affectedCount, costImpact, usdDelta, overThreshold);
     }
 
     /** Persists the job record and returns immediately (202); the poller executes it. */
@@ -196,6 +201,13 @@ public class BulkRaiseService {
         run.setReviewCount(parked);
         run.setExcludedCount(excludedCount);
         bulkRaiseRunRepository.save(run);
+    }
+
+    /** total raise % = (current - baseline) / baseline, same arithmetic as the guardrail. */
+    private OverThresholdEmployee toOverThreshold(OverThresholdAggregate a) {
+        BigDecimal percent = a.currentSalary().subtract(a.baselineSalary())
+                .multiply(HUNDRED).divide(a.baselineSalary(), 2, RoundingMode.HALF_UP);
+        return new OverThresholdEmployee(a.employeeId(), a.employeeCode(), a.name(), percent, a.lastRaiseAt());
     }
 
     private BigDecimal proposedTotal(CurrencyCohortAggregate aggregate,

@@ -73,7 +73,7 @@ export interface BulkRaisePreview {
   affectedCount: number
   costImpact: { currencyCode: string; current: number; proposed: number; delta: number }[]
   costImpactUsdDelta: number
-  recentlyRaised: { employeeId: number; employeeCode: string; name: string; lastRaiseAt: string }[]
+  overThreshold: { employeeId: number; employeeCode: string; name: string; totalRaisePercent: number; lastRaiseAt: string }[]
 }
 
 export type ReviewStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
@@ -103,6 +103,20 @@ export interface PayrollRun {
   alreadyProcessedCount: number
   initiatedBy: string
   createdAt: string
+}
+
+export type PayrollMonthState = 'OPENS_LATER' | 'DUE' | 'PROCESSING' | 'PARTIAL' | 'PAID'
+
+export interface PayrollMonth {
+  year: number
+  month: number
+  state: PayrollMonthState
+  creditedCount: number
+  unpaidCount: number
+  heldCount: number
+  lastPaidAt: string | null
+  opensOn: string | null
+  activeRunId: number | null
 }
 
 export interface SalaryCredit {

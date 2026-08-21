@@ -7,7 +7,7 @@ public record BulkRaisePreviewResponse(
         long affectedCount,
         List<CostImpactEntry> costImpact,
         BigDecimal costImpactUsdDelta,
-        List<RecentlyRaisedEmployee> recentlyRaised
+        List<OverThresholdEmployee> overThreshold
 ) {
     public record CostImpactEntry(String currencyCode, BigDecimal current,
                                   BigDecimal proposed, BigDecimal delta) {

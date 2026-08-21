@@ -14,7 +14,9 @@ mirror of this contract; divergence is a bug.
 - **Error codes** (frontend branches on `error.code`, never message text):
   `NOT_FOUND` 404 · `VALIDATION` 400 · `DUPLICATE_CODE` 409 · `UNKNOWN_CURRENCY` 409 ·
   `STALE_VERSION` 409 · `CONCURRENT_MODIFICATION` 409 ·
-  `STALE_PROPOSAL` 409 · `ALREADY_RESOLVED` 409 · `UNAUTHENTICATED` 401.
+  `STALE_PROPOSAL` 409 · `ALREADY_RESOLVED` 409 · `UNAUTHENTICATED` 401 ·
+  `INTERNAL` 500 (unforeseen failure — envelope shape still holds; malformed/
+  unparseable requests map to `VALIDATION` 400 with a human sentence).
   New conditions get new codes; this list is the registry.
 - **Offset pagination** (every list, audit feed included): request `page` (0-based)
   + `size` (clamped to `app.pagination.max-page-size`, 100); response
@@ -69,7 +71,7 @@ actor, bulkRaiseRunId, createdAt}` (append-only).
 
 | Method & path | Request | Response `data` |
 |---|---|---|
-| ✅ `POST /api/bulk-raises/preview` | `{raiseType: PERCENT\|AMOUNT, value, filterCountry?, filterDepartment?}` (no filters = whole org) | `{affectedCount, costImpact:[{currencyCode, current, proposed, delta}], costImpactUsdDelta, recentlyRaised:[{employeeId, employeeCode, name, lastRaiseAt}]}` |
+| ✅ `POST /api/bulk-raises/preview` | `{raiseType: PERCENT\|AMOUNT, value, filterCountry?, filterDepartment?}` (no filters = whole org) | `{affectedCount, costImpact:[{currencyCode, current, proposed, delta}], costImpactUsdDelta, overThreshold:[{employeeId, employeeCode, name, totalRaisePercent, lastRaiseAt}]}` — `overThreshold` = cohort employees whose raises since their first recorded change total more than the guardrail threshold (OrgSettings), any time, newest-heaviest first; shown for optional exclusion |
 | ✅ `POST /api/bulk-raises` | preview request + `{excludedEmployeeIds:[]}` | **202** `BulkRaiseRun` (status QUEUED) — durable job, poll for progress |
 | ✅ `GET /api/bulk-raises/{id}` | – | `BulkRaiseRun` (live counts while RUNNING) |
 | ✅ `GET /api/bulk-raises` | `?page&size` | offset page of `BulkRaiseRun` |
@@ -101,6 +103,7 @@ Approving applies `proposedNew` as a salary change attributed to the approver.
 
 | Method & path | Request | Response `data` |
 |---|---|---|
+| ✅ `GET /api/payroll/months` | `?months=13` (1–24, newest first) | `[{year, month, state: OPENS_LATER\|DUE\|PROCESSING\|PARTIAL\|PAID, creditedCount, unpaidCount, heldCount, lastPaidAt?, opensOn?, activeRunId?}]` — drives the month-centric screen; `unpaidCount` = ACTIVE employees without a credit for the period, i.e. exactly what "Pay" would credit |
 | ✅ `POST /api/payroll/runs` | `{year, month, employeeId?}` (omit employeeId = whole org) | **202** `PayrollRun` (status QUEUED) — durable job, poll for progress |
 | ✅ `GET /api/payroll/runs/{id}` | – | `PayrollRun` (live counts while RUNNING) |
 | ✅ `GET /api/payroll/runs` | `?page&size` | offset page of `PayrollRun` |
