@@ -2,6 +2,7 @@ package com.acme.salary.repository;
 
 import com.acme.salary.dto.CurrencyCohortAggregate;
 import com.acme.salary.entities.Employee;
+import com.acme.salary.enums.EmployeeStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -45,4 +46,21 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, JpaSp
     /** Payroll: held employees are skipped from processing (holds block payout). */
     @Query("SELECT e.id FROM Employee e WHERE e.deleted = false AND e.status = com.acme.salary.enums.EmployeeStatus.ON_HOLD")
     List<Long> findHeldEmployeeIds();
+
+    long countByDeletedFalseAndStatus(EmployeeStatus status);
+
+    /**
+     * Payroll screen: ACTIVE employees with no credit for the period — exactly
+     * the set a "Pay" for that month would credit (held employees are skipped,
+     * so they are not counted as unpaid).
+     */
+    @Query("""
+            SELECT COUNT(e.id) FROM Employee e
+            WHERE e.deleted = false
+              AND e.status = com.acme.salary.enums.EmployeeStatus.ACTIVE
+              AND NOT EXISTS (
+                  SELECT 1 FROM SalaryCredit c
+                  WHERE c.employeeId = e.id AND c.year = :year AND c.month = :month)
+            """)
+    long countActiveUnpaidForPeriod(@Param("year") int year, @Param("month") int month);
 }

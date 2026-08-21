@@ -7,6 +7,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import com.acme.salary.dto.MonthCreditAggregate;
+
 import java.util.List;
 
 /**
@@ -32,4 +34,17 @@ public interface SalaryCreditRepository extends JpaRepository<SalaryCredit, Long
             WHERE c.year = :year AND c.month = :month
             """)
     List<Long> findEmployeeIdsCreditedForPeriod(@Param("year") int year, @Param("month") int month);
+
+    /**
+     * Month-centric payroll screen: credits per period from :fromYm (yyyyMM)
+     * onward, aggregated in the database.
+     */
+    @Query("""
+            SELECT new com.acme.salary.dto.MonthCreditAggregate(
+                c.year, c.month, COUNT(c.id), MAX(c.createdAt))
+            FROM SalaryCredit c
+            WHERE c.year * 100 + c.month >= :fromYm
+            GROUP BY c.year, c.month
+            """)
+    List<MonthCreditAggregate> aggregateByPeriodSince(@Param("fromYm") int fromYm);
 }

@@ -5,11 +5,15 @@ import com.acme.salary.config.JobProperties;
 import com.acme.salary.config.PayrollProperties;
 import com.acme.salary.dto.response.PageResponse;
 import com.acme.salary.dto.request.PayrollRunRequest;
+import com.acme.salary.dto.MonthCreditAggregate;
+import com.acme.salary.dto.response.PayrollMonthResponse;
 import com.acme.salary.dto.response.PayrollRunResponse;
 import com.acme.salary.dto.response.SalaryCreditResponse;
 import com.acme.salary.entities.PayrollRun;
 import com.acme.salary.enums.AuditAction;
 import com.acme.salary.enums.AuditEntityType;
+import com.acme.salary.enums.EmployeeStatus;
+import com.acme.salary.enums.PayrollMonthState;
 import com.acme.salary.enums.JobStatus;
 import com.acme.salary.events.AuditEvent;
 import com.acme.salary.exception.NotFoundException;
@@ -28,9 +32,13 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Payroll processing as a durable background job (same idiom as bulk raises).
@@ -44,6 +52,9 @@ import java.util.Set;
 @RequiredArgsConstructor
 @Slf4j
 public class PayrollService {
+
+    /** Upper bound for the month view: two years is more than any screen shows. */
+    private static final int MAX_MONTHS_VIEW = 24;
 
     private final EmployeeRepository employeeRepository;
     private final SalaryCreditRepository salaryCreditRepository;
@@ -126,6 +137,54 @@ public class PayrollService {
                 .runId(run.getId()).build());
         log.info("Payroll run {} ({}-{}) completed: processed={}, skippedHeld={}, alreadyProcessed={}",
                 run.getId(), run.getYear(), run.getMonth(), processed, skippedHeld, alreadyProcessed);
+    }
+
+    /**
+     * The month-centric payroll screen: the current month and the N-1 before
+     * it, newest first, each with the state that decides the button's label.
+     * Counts come from aggregate queries; the 10k rows are never loaded.
+     */
+    public List<PayrollMonthResponse> months(int count) {
+        int months = Math.max(1, Math.min(count, MAX_MONTHS_VIEW));
+        LocalDate today = LocalDate.now(clock);
+        YearMonth current = YearMonth.from(today);
+        YearMonth oldest = current.minusMonths(months - 1L);
+
+        Map<YearMonth, MonthCreditAggregate> credited = salaryCreditRepository
+                .aggregateByPeriodSince(oldest.getYear() * 100 + oldest.getMonthValue()).stream()
+                .collect(Collectors.toMap(a -> YearMonth.of(a.year(), a.month()), Function.identity()));
+        Map<YearMonth, PayrollRun> inFlight = payrollRunRepository
+                .findByStatusInAndEmployeeIdIsNull(List.of(JobStatus.QUEUED, JobStatus.RUNNING)).stream()
+                .collect(Collectors.toMap(r -> YearMonth.of(r.getYear(), r.getMonth()),
+                        Function.identity(), (a, b) -> a));
+        long held = employeeRepository.countByDeletedFalseAndStatus(EmployeeStatus.ON_HOLD);
+
+        List<PayrollMonthResponse> rows = new ArrayList<>();
+        for (YearMonth ym = current; !ym.isBefore(oldest); ym = ym.minusMonths(1)) {
+            MonthCreditAggregate agg = credited.get(ym);
+            long creditedCount = agg == null ? 0 : agg.creditedCount();
+            long unpaid = employeeRepository.countActiveUnpaidForPeriod(ym.getYear(), ym.getMonthValue());
+            PayrollRun run = inFlight.get(ym);
+            LocalDate opensOn = ym.atDay(payrollProperties.currentMonthProcessableFromDay());
+            boolean opensLater = ym.equals(current) && today.isBefore(opensOn);
+
+            PayrollMonthState state;
+            if (run != null) {
+                state = PayrollMonthState.PROCESSING;
+            } else if (opensLater) {
+                state = PayrollMonthState.OPENS_LATER;
+            } else if (creditedCount == 0) {
+                state = PayrollMonthState.DUE;
+            } else if (unpaid == 0) {
+                state = PayrollMonthState.PAID;
+            } else {
+                state = PayrollMonthState.PARTIAL;
+            }
+            rows.add(new PayrollMonthResponse(ym.getYear(), ym.getMonthValue(), state, creditedCount,
+                    unpaid, held, agg == null ? null : agg.lastCreditedAt(),
+                    opensLater ? opensOn : null, run == null ? null : run.getId()));
+        }
+        return rows;
     }
 
     public PayrollRunResponse getRun(Long id) {

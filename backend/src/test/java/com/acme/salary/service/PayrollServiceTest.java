@@ -4,11 +4,15 @@ import com.acme.salary.config.PaginationProperties;
 import com.acme.salary.config.JobProperties;
 import com.acme.salary.config.PayrollProperties;
 import com.acme.salary.dto.request.PayrollRunRequest;
+import com.acme.salary.dto.MonthCreditAggregate;
+import com.acme.salary.dto.response.PayrollMonthResponse;
 import com.acme.salary.dto.response.PayrollRunResponse;
 import com.acme.salary.entities.Employee;
 import com.acme.salary.entities.PayrollRun;
 import com.acme.salary.entities.SalaryCredit;
+import com.acme.salary.enums.EmployeeStatus;
 import com.acme.salary.enums.JobStatus;
+import com.acme.salary.enums.PayrollMonthState;
 import com.acme.salary.exception.ValidationException;
 import com.acme.salary.repository.EmployeeRepository;
 import com.acme.salary.repository.PayrollRunRepository;
@@ -182,5 +186,48 @@ class PayrollServiceTest {
 
         assertThat(run.getStatus()).isEqualTo(JobStatus.COMPLETED);
         assertThat(run.getProcessedCount()).isEqualTo(2);
+    }
+
+    // ---------- month-centric view ----------
+
+    @Test
+    void monthsDeriveStateFromCreditsUnpaidAndInFlightRuns() {
+        // fixed today = 2026-08-20: August opens on the 25th; July fully paid;
+        // June partially paid (12 joiners since); May never paid; April has a run in flight
+        when(salaryCreditRepository.aggregateByPeriodSince(202604)).thenReturn(List.of(
+                new MonthCreditAggregate(2026, 7, 10_000, LocalDateTime.of(2026, 7, 25, 6, 0)),
+                new MonthCreditAggregate(2026, 6, 9_900, LocalDateTime.of(2026, 6, 25, 6, 0))));
+        when(payrollRunRepository.findByStatusInAndEmployeeIdIsNull(any())).thenReturn(List.of(
+                PayrollRun.builder().id(77L).year(2026).month(4).status(JobStatus.RUNNING).build()));
+        when(employeeRepository.countByDeletedFalseAndStatus(EmployeeStatus.ON_HOLD)).thenReturn(4L);
+        when(employeeRepository.countActiveUnpaidForPeriod(2026, 8)).thenReturn(9_700L);
+        when(employeeRepository.countActiveUnpaidForPeriod(2026, 7)).thenReturn(0L);
+        when(employeeRepository.countActiveUnpaidForPeriod(2026, 6)).thenReturn(12L);
+        when(employeeRepository.countActiveUnpaidForPeriod(2026, 5)).thenReturn(9_700L);
+        when(employeeRepository.countActiveUnpaidForPeriod(2026, 4)).thenReturn(500L);
+
+        List<PayrollMonthResponse> rows = service().months(5);
+
+        assertThat(rows).extracting(PayrollMonthResponse::month).containsExactly(8, 7, 6, 5, 4);
+        assertThat(rows.get(0).state()).isEqualTo(PayrollMonthState.OPENS_LATER);
+        assertThat(rows.get(0).opensOn()).isEqualTo(java.time.LocalDate.of(2026, 8, 25));
+        assertThat(rows.get(1).state()).isEqualTo(PayrollMonthState.PAID);
+        assertThat(rows.get(1).creditedCount()).isEqualTo(10_000);
+        assertThat(rows.get(2).state()).isEqualTo(PayrollMonthState.PARTIAL);
+        assertThat(rows.get(2).unpaidCount()).isEqualTo(12);
+        assertThat(rows.get(3).state()).isEqualTo(PayrollMonthState.DUE);
+        assertThat(rows.get(4).state()).isEqualTo(PayrollMonthState.PROCESSING);
+        assertThat(rows.get(4).activeRunId()).isEqualTo(77L);
+        assertThat(rows).allSatisfy(r -> assertThat(r.heldCount()).isEqualTo(4));
+    }
+
+    @Test
+    void monthsWindowIsClampedToTheConfiguredMaximum() {
+        when(salaryCreditRepository.aggregateByPeriodSince(anyInt())).thenReturn(List.of());
+        when(payrollRunRepository.findByStatusInAndEmployeeIdIsNull(any())).thenReturn(List.of());
+        when(employeeRepository.countActiveUnpaidForPeriod(anyInt(), anyInt())).thenReturn(0L);
+
+        assertThat(service().months(500)).hasSize(24);
+        assertThat(service().months(0)).hasSize(1);
     }
 }
