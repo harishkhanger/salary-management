@@ -15,7 +15,7 @@ ACME's HR team manages salary data for ~10,000 employees across multiple countri
 5. **Payroll processing** — process salary for one employee or the whole org. Each run creates **immutable `SalaryCredit` records** snapshotting amount, currency, and USD conversion rate at credit time. **Idempotent by unique constraint** (employee, year, month) — a run can never double-pay.
 6. **Salary hold** — employees can be placed on hold; processing skips them. Holds block payout, not compensation changes.
 7. **Currency management** — settings page for ~10 currencies with manually managed USD conversion rates. Rate edits affect future credits and analytics only — never historical credits.
-8. **Audit trail** — a centralized, append-only audit log capturing every change (profile edits, holds, deletions), with thin reference events for salary changes/credits (facts logged, amounts live in their own tables — complete trail, no duplication). Captured after business-transaction commit via transactional events. Global view collapses bulk runs into headers (expand = paginated drill-in); per-employee view shows that employee's full activity. **Keyset pagination** keeps reads constant-time at any depth; seeded with ~12 months of simulated history (300k+ rows) to demonstrate it.
+8. **Audit trail** — a centralized, append-only audit log capturing every change (profile edits, holds, deletions), with thin reference events for salary changes/credits (facts logged, amounts live in their own tables — complete trail, no duplication). Captured after business-transaction commit via transactional events. Global view collapses bulk runs into headers (expand = paginated drill-in); per-employee view shows that employee's full activity. Numbered (offset) pages, consistent with every other list, ordered by `(created_at, id)` so pages are stable; seeded with ~12 months of simulated history (300k+ rows) to demonstrate it at scale.
 9. **Analytics dashboard** — answers "how do we pay people": total monthly spend (USD-normalized), spend & headcount by country, average/median by department, salary distribution, employees on hold, last run summary.
 10. **Authentication** — session-based login for the single seeded HR user.
 
@@ -28,7 +28,7 @@ ACME's HR team manages salary data for ~10,000 employees across multiple countri
 - **Live FX feeds** — rate freshness is a data-ops concern; manually managed rates demonstrate the design without the operational surface.
 - **Bulk Excel import** — migration is a one-time operation, not the product; the seed script plays that role here.
 - **Clawback of paid credits** — credits are immutable facts; wrong raises are reversed going forward, real-money recovery is out of scope.
-- **Kafka / partitioning / search infra for audit** — documented as the scale path; the shipped patterns (append-only writes, keyset pagination, deliberate indexes) carry to millions of rows before any of it is needed.
+- **Kafka / partitioning / search infra for audit** — documented as the scale path; the shipped patterns (append-only writes, deliberate indexes; keyset pagination as the next step when offset depth starts to cost) carry to millions of rows before any of it is needed.
 
 ## Assumptions
 

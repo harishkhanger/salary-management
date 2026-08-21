@@ -16,11 +16,9 @@ mirror of this contract; divergence is a bug.
   `STALE_VERSION` 409 · `CONCURRENT_MODIFICATION` 409 ·
   `STALE_PROPOSAL` 409 · `ALREADY_RESOLVED` 409 · `UNAUTHENTICATED` 401.
   New conditions get new codes; this list is the registry.
-- **Offset pagination** (directory-style lists): request `page` (0-based) + `size`
-  (clamped to `app.pagination.max-page-size`, 100); response
+- **Offset pagination** (every list, audit feed included): request `page` (0-based)
+  + `size` (clamped to `app.pagination.max-page-size`, 100); response
   `{content:[], page, size, totalElements, totalPages}`.
-- **Keyset pagination** (audit feed only): request `cursor` (opaque, from previous
-  response) + `limit`; response `{items:[], nextCursor}`. Constant-time at any depth.
 - **Optimistic locking**: mutations on an employee carry the `version` the client
   loaded; mismatch → 409 `STALE_VERSION`.
 - **Money**: decimal numbers, 2dp, local currency of the employee unless a field is
@@ -131,9 +129,10 @@ skipped and counted. Month rule: past months always; current month only from day
 
 | Method & path | Request | Response `data` |
 |---|---|---|
-| ✅ `GET /api/audit` | `?cursor&limit&entityType&entityId&runId&runType&action&actor&from&to` | `{items:[AuditEntry\|RunHeader], nextCursor}` |
+| ✅ `GET /api/audit` | `?page&size&entityType&entityId&runId&runType&action&actor&from&to` | offset page of `AuditEntry\|RunHeader` |
 
-Keyset-paginated (`(createdAt, id)` cursor, opaque Base64). Approach (b): run
+Offset page ordered `(createdAt DESC, id DESC)` — the id tiebreaker keeps page
+boundaries stable inside equal-timestamp groups. Approach (b): run
 headers ARE audit rows — jobs emit one RUN_COMPLETED row; the global view is one
 query (`run_id IS NULL OR action = RUN_COMPLETED`) so item rows collapse and
 headers appear inline, enriched at read time from the run tables (`runSummary`).
@@ -149,7 +148,8 @@ Currencies have no numeric id: entityId 0, code inside changed_fields.
 Feed filters (global view): `action` and `entityType` (alone — validated against
 the enums, else 400 VALIDATION), `actor` (exact match), `from`/`to` (ISO dates,
 inclusive whole days; `to` before `from` = 400 VALIDATION). Conjunctive, so they
-compose with the keyset cursor unchanged; run-item rows stay collapsed.
+compose with the page window (`totalElements` reflects the filtered set); run-item
+rows stay collapsed.
 
 ## 9. Analytics ✅
 
@@ -178,7 +178,7 @@ COUNT OVER partition, average of the middle rows) — MySQL has no MEDIAN().
 | Review queue approve/reject | ✅ |
 | Payroll runs + credits | ✅ |
 | Currencies & settings | ✅ |
-| Audit feed (keyset + run collapse) | ✅ |
+| Audit feed (paged + run collapse) | ✅ |
 | Analytics | ✅ |
 | Auth (session) | ✅ |
 

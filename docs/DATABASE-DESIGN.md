@@ -107,7 +107,7 @@ erDiagram
         varchar ref_table "thin reference, nullable"
         bigint ref_id
         bigint run_id "nullable - collapse key"
-        datetime created_at "keyset cursor"
+        datetime created_at "feed sort key"
     }
 
     EMPLOYEES ||--o{ SALARY_CHANGES : "has history of"
@@ -138,7 +138,7 @@ erDiagram
 | `salary_changes (employee_id, created_at DESC)` | change-history panel |
 | `salary_credits (employee_id, year DESC, month DESC)` | credit-history panel (the unique key also serves lookups) |
 | `audit_log (entity_type, entity_id, created_at DESC)` | per-employee activity panel |
-| `audit_log (created_at DESC, id DESC)` | global feed — **keyset pagination** walks this index; constant-time at any depth |
+| `audit_log (created_at DESC, id DESC)` | global feed — offset pages walk this index in sort order (no filesort); measured on 140k rows: 0.1ms first page, ~15ms at offset 100k, ~10ms for the page COUNT. Linear in depth; switching to keyset (`WHERE (created_at, id) < cursor`) on the same index is the scale path if deep pages ever matter |
 | `audit_log (run_id)` | run drill-down (expand a collapsed bulk run) |
 
 Rarer filter combinations on the audit feed ride the `created_at` index and scan the narrowed range — acceptable because filtered sets are small; indexing every combination is deliberately avoided.
@@ -147,7 +147,7 @@ Rarer filter combinations on the audit feed ride the `created_at` index and scan
 
 - Money columns: `DECIMAL(15,2)`; FX rates: `DECIMAL(12,6)`. Never floats.
 - Enum-valued columns ship as `VARCHAR` + `CHECK` constraints (not MySQL `ENUM`) so the identical Flyway migration runs on both MySQL and the H2 test slice; the invariant is the same.
-- All `DATETIME` values are UTC: the JDBC layer is pinned with `hibernate.jdbc.time_zone: UTC`, and application code stamps timestamps in UTC. Keyset cursors and the seeded history rely on this single convention.
+- All `DATETIME` values are UTC: the JDBC layer is pinned with `hibernate.jdbc.time_zone: UTC`, and application code stamps timestamps in UTC. Feed ordering and the seeded history rely on this single convention.
 - **Rate convention:** `usd_rate` = units of local currency per 1 USD (e.g., 90.00 INR/USD). USD values are derived at read time as `amount / usd_rate` — from the row's own snapshot for history, from current `currency_rates` for projections. The snapshot is captured by copying the live rate into the credit row at insert; credits never join back to `currency_rates`.
 - `audit_log.changed_fields` is JSON (`old → new` per field) for profile edits; **salary events store no amounts here** — they are thin references (`ref_table`, `ref_id`) to the owning row. Complete trail, zero duplication.
 - `run_id` on `audit_log` is the collapse key: the global UI groups bulk-generated rows under one header sourced from the run tables.

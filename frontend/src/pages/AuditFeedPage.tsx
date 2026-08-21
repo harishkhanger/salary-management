@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { get } from '../api/client'
-import type { AuditFeed, AuditFeedItem } from '../api/types'
+import type { AuditFeedItem, Page } from '../api/types'
 import { useToast } from '../components/Toaster'
-import { Spinner, formatDateTime } from '../components/ui'
+import { Pagination, Spinner, formatDateTime } from '../components/ui'
 
 /**
- * Global audit feed: keyset-paginated; bulk runs appear as ONE collapsed
- * header row (approach b — headers are audit rows) that expands inline to
- * its item rows via the same endpoint filtered by runId + runType.
+ * Global audit feed: numbered pages like every other list; bulk runs appear
+ * as ONE collapsed header row (approach b — headers are audit rows) that
+ * expands inline to its own paged item rows via the same endpoint filtered
+ * by runId + runType.
  */
 const ACTIONS = [
   'CREATED',
@@ -29,10 +30,8 @@ const ENTITY_TYPES = ['EMPLOYEE', 'PAYROLL_RUN', 'BULK_RAISE_RUN', 'CURRENCY', '
 
 export default function AuditFeedPage() {
   const toast = useToast()
-  const [items, setItems] = useState<AuditFeedItem[]>([])
-  const [cursor, setCursor] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [initialised, setInitialised] = useState(false)
+  const [data, setData] = useState<Page<AuditFeedItem> | null>(null)
+  const [page, setPage] = useState(0)
   const [action, setAction] = useState('')
   const [entityType, setEntityType] = useState('')
   const [actor, setActor] = useState('')
@@ -42,37 +41,31 @@ export default function AuditFeedPage() {
 
   const hasFilters = Boolean(action || entityType || actor || from || to)
 
-  const loadPage = useCallback(
-    (after: string | null) => {
-      const seq = ++requestSeq.current
-      setLoading(true)
-      get<AuditFeed>('/audit', {
-        limit: 25,
-        cursor: after ?? undefined,
-        action: action || undefined,
-        entityType: entityType || undefined,
-        actor: actor || undefined,
-        from: from || undefined,
-        to: to || undefined,
-      })
-        .then((feed) => {
-          if (seq !== requestSeq.current) return
-          setItems((prev) => (after ? [...prev, ...feed.items] : feed.items))
-          setCursor(feed.nextCursor)
-          setInitialised(true)
-        })
-        .catch((e) => {
-          if (seq === requestSeq.current) toast.error(e.message)
-        })
-        .finally(() => {
-          if (seq === requestSeq.current) setLoading(false)
-        })
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [action, entityType, actor, from, to],
-  )
+  // any filter change restarts from the first page
+  const setFilter = (setter: (v: string) => void) => (value: string) => {
+    setter(value)
+    setPage(0)
+  }
 
-  useEffect(() => loadPage(null), [loadPage])
+  useEffect(() => {
+    const seq = ++requestSeq.current
+    get<Page<AuditFeedItem>>('/audit', {
+      page,
+      size: 25,
+      action: action || undefined,
+      entityType: entityType || undefined,
+      actor: actor || undefined,
+      from: from || undefined,
+      to: to || undefined,
+    })
+      .then((result) => {
+        if (seq === requestSeq.current) setData(result)
+      })
+      .catch((e) => {
+        if (seq === requestSeq.current) toast.error(e.message)
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, action, entityType, actor, from, to])
 
   return (
     <div>
@@ -84,7 +77,7 @@ export default function AuditFeedPage() {
           </div>
         </div>
         <div className="filters-bar">
-          <select className="select" value={action} onChange={(e) => setAction(e.target.value)}>
+          <select className="select" value={action} onChange={(e) => setFilter(setAction)(e.target.value)}>
             <option value="">All actions</option>
             {ACTIONS.map((a) => (
               <option key={a} value={a}>
@@ -92,7 +85,7 @@ export default function AuditFeedPage() {
               </option>
             ))}
           </select>
-          <select className="select" value={entityType} onChange={(e) => setEntityType(e.target.value)}>
+          <select className="select" value={entityType} onChange={(e) => setFilter(setEntityType)(e.target.value)}>
             <option value="">All entities</option>
             {ENTITY_TYPES.map((t) => (
               <option key={t} value={t}>
@@ -100,7 +93,7 @@ export default function AuditFeedPage() {
               </option>
             ))}
           </select>
-          <select className="select" value={actor} onChange={(e) => setActor(e.target.value)}>
+          <select className="select" value={actor} onChange={(e) => setFilter(setActor)(e.target.value)}>
             <option value="">All actors</option>
             <option value="hr">hr</option>
             <option value="system">system</option>
@@ -110,7 +103,7 @@ export default function AuditFeedPage() {
             type="date"
             value={from}
             max={to || undefined}
-            onChange={(e) => setFrom(e.target.value)}
+            onChange={(e) => setFilter(setFrom)(e.target.value)}
             title="From date"
           />
           <input
@@ -118,7 +111,7 @@ export default function AuditFeedPage() {
             type="date"
             value={to}
             min={from || undefined}
-            onChange={(e) => setTo(e.target.value)}
+            onChange={(e) => setFilter(setTo)(e.target.value)}
             title="To date"
           />
           {hasFilters && (
@@ -130,6 +123,7 @@ export default function AuditFeedPage() {
                 setActor('')
                 setFrom('')
                 setTo('')
+                setPage(0)
               }}
             >
               Clear
@@ -139,21 +133,23 @@ export default function AuditFeedPage() {
       </div>
 
       <div className="card">
-        {!initialised ? (
+        {!data ? (
           <Spinner />
-        ) : items.length === 0 ? (
+        ) : data.content.length === 0 ? (
           <div className="table-empty">{hasFilters ? 'No entries match these filters' : 'No activity yet'}</div>
         ) : (
-          items.map((item) =>
+          data.content.map((item) =>
             item.kind === 'RUN' ? <RunRow key={`run-${item.id}`} item={item} /> : <EntryRow key={item.id} item={item} />,
           )
         )}
-        {cursor && (
-          <div style={{ textAlign: 'center', marginTop: 14 }}>
-            <button className="btn" disabled={loading} onClick={() => loadPage(cursor)}>
-              {loading ? 'Loading…' : 'Load older entries'}
-            </button>
-          </div>
+        {data && data.totalElements > 0 && (
+          <Pagination
+            page={page}
+            totalPages={data.totalPages}
+            totalElements={data.totalElements}
+            noun="entries"
+            onChange={setPage}
+          />
         )}
       </div>
     </div>
@@ -185,27 +181,17 @@ function EntryRow({ item, compact }: { item: AuditFeedItem; compact?: boolean })
 
 function RunRow({ item }: { item: AuditFeedItem }) {
   const [open, setOpen] = useState(false)
-  const [runItems, setRunItems] = useState<AuditFeedItem[] | null>(null)
-  const [runCursor, setRunCursor] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [runItems, setRunItems] = useState<Page<AuditFeedItem> | null>(null)
+  const [runPage, setRunPage] = useState(0)
 
   const runType = item.entityType === 'PAYROLL_RUN' ? 'PAYROLL' : 'BULK_RAISE'
 
-  const loadItems = (after: string | null) => {
-    setLoading(true)
-    get<AuditFeed>('/audit', { runId: item.runId, runType, limit: 20, cursor: after ?? undefined })
-      .then((feed) => {
-        setRunItems((prev) => (after && prev ? [...prev, ...feed.items] : feed.items))
-        setRunCursor(feed.nextCursor)
-      })
-      .finally(() => setLoading(false))
-  }
+  useEffect(() => {
+    if (!open) return
+    get<Page<AuditFeedItem>>('/audit', { runId: item.runId, runType, page: runPage, size: 20 }).then(setRunItems)
+  }, [open, runPage, item.runId, runType])
 
-  const toggle = () => {
-    const next = !open
-    setOpen(next)
-    if (next && runItems === null) loadItems(null)
-  }
+  const toggle = () => setOpen((prev) => !prev)
 
   const summary = item.runSummary ?? {}
   const counts =
@@ -233,19 +219,21 @@ function RunRow({ item }: { item: AuditFeedItem }) {
         <div className="feed-run-items">
           {runItems === null ? (
             <Spinner />
-          ) : runItems.length === 0 ? (
+          ) : runItems.content.length === 0 ? (
             <div className="muted" style={{ padding: '8px 0' }}>
               No item rows for this run
             </div>
           ) : (
-            runItems.map((ri) => <EntryRow key={ri.id} item={ri} compact />)
+            runItems.content.map((ri) => <EntryRow key={ri.id} item={ri} compact />)
           )}
-          {runCursor && (
-            <div style={{ textAlign: 'center', marginTop: 8 }}>
-              <button className="btn btn-sm" disabled={loading} onClick={() => loadItems(runCursor)}>
-                {loading ? 'Loading…' : 'Load more items'}
-              </button>
-            </div>
+          {runItems && runItems.totalPages > 1 && (
+            <Pagination
+              page={runPage}
+              totalPages={runItems.totalPages}
+              totalElements={runItems.totalElements}
+              noun="items"
+              onChange={setRunPage}
+            />
           )}
         </div>
       )}

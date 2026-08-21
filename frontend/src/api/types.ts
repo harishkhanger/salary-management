@@ -148,11 +148,6 @@ export interface AuditFeedItem {
   createdAt: string
 }
 
-export interface AuditFeed {
-  items: AuditFeedItem[]
-  nextCursor: string | null
-}
-
 export interface AnalyticsSummary {
   totalMonthlySpendUsd: number
   headcount: number

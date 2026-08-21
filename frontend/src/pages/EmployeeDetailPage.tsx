@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ApiError, del, get, post, put } from '../api/client'
 import type {
-  AuditFeed,
   AuditFeedItem,
   ChangeType,
   Employee,
@@ -405,29 +404,17 @@ function CreditsPanel({ employeeId, refreshKey }: { employeeId: number; refreshK
 }
 
 function ActivityPanel({ employeeId, refreshKey }: { employeeId: number; refreshKey: number }) {
-  const [items, setItems] = useState<AuditFeedItem[]>([])
-  const [cursor, setCursor] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [data, setData] = useState<Page<AuditFeedItem> | null>(null)
+  const [page, setPage] = useState(0)
 
-  const loadPage = useCallback(
-    (after: string | null, reset: boolean) => {
-      setLoading(true)
-      get<AuditFeed>('/audit', {
-        entityType: 'EMPLOYEE',
-        entityId: employeeId,
-        limit: 15,
-        cursor: after ?? undefined,
-      })
-        .then((feed) => {
-          setItems((prev) => (reset ? feed.items : [...prev, ...feed.items]))
-          setCursor(feed.nextCursor)
-        })
-        .finally(() => setLoading(false))
-    },
-    [employeeId],
-  )
+  // a fresh mutation lands on page 0 — jump back so it is visible
+  useEffect(() => setPage(0), [refreshKey])
 
-  useEffect(() => loadPage(null, true), [loadPage, refreshKey])
+  useEffect(() => {
+    get<Page<AuditFeedItem>>('/audit', { entityType: 'EMPLOYEE', entityId: employeeId, page, size: 15 }).then(setData)
+  }, [employeeId, page, refreshKey])
+
+  const items = data?.content ?? []
 
   return (
     <div>
@@ -441,7 +428,7 @@ function ActivityPanel({ employeeId, refreshKey }: { employeeId: number; refresh
           </tr>
         </thead>
         <tbody>
-          {items.length === 0 && !loading ? (
+          {data && items.length === 0 ? (
             <tr>
               <td colSpan={4} className="table-empty">
                 No activity recorded
@@ -465,12 +452,14 @@ function ActivityPanel({ employeeId, refreshKey }: { employeeId: number; refresh
           )}
         </tbody>
       </table>
-      {cursor && (
-        <div style={{ textAlign: 'center', marginTop: 12 }}>
-          <button className="btn btn-sm" disabled={loading} onClick={() => loadPage(cursor, false)}>
-            {loading ? 'Loading…' : 'Load older activity'}
-          </button>
-        </div>
+      {data && data.totalElements > 0 && (
+        <Pagination
+          page={page}
+          totalPages={data.totalPages}
+          totalElements={data.totalElements}
+          noun="events"
+          onChange={setPage}
+        />
       )}
     </div>
   )

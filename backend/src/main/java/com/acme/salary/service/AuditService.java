@@ -1,8 +1,8 @@
 package com.acme.salary.service;
 
 import com.acme.salary.config.PaginationProperties;
-import com.acme.salary.dto.response.AuditFeedResponse;
-import com.acme.salary.dto.response.AuditFeedResponse.AuditFeedItem;
+import com.acme.salary.dto.response.AuditFeedItem;
+import com.acme.salary.dto.response.PageResponse;
 import com.acme.salary.entities.AuditLog;
 import com.acme.salary.entities.BulkRaiseRun;
 import com.acme.salary.entities.PayrollRun;
@@ -13,6 +13,7 @@ import com.acme.salary.repository.AuditLogRepository;
 import com.acme.salary.repository.BulkRaiseRunRepository;
 import com.acme.salary.repository.PayrollRunRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -20,21 +21,21 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
- * The global audit feed. Keyset pagination over (created_at DESC, id DESC) —
- * constant-time at any depth, never OFFSET. The global view hides run-tagged
- * item rows and shows RUN_COMPLETED headers inline (approach b: headers are
- * audit rows too); expanding a run is the same query filtered by runId.
+ * The global audit feed. Offset-paginated over (created_at DESC, id DESC) like
+ * every other list, so the UI shows numbered pages with a total; the id
+ * tiebreaker keeps page boundaries stable inside equal-timestamp groups. The
+ * global view hides run-tagged item rows and shows RUN_COMPLETED headers
+ * inline (approach b: headers are audit rows too); expanding a run is the same
+ * query filtered by runId. Keyset was the original design (constant-time at
+ * any depth); numbered pages were chosen for UX consistency — the cost is a
+ * COUNT plus an index walk that grows linearly with depth (~15ms at offset
+ * 100k on 140k rows), documented in docs/DATABASE-DESIGN.md.
  */
 @Service
 @RequiredArgsConstructor
@@ -47,27 +48,18 @@ public class AuditService {
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
-    public AuditFeedResponse feed(String cursor, int limit, String entityType, Long entityId,
-                                  Long runId, String runType, String action, String actor,
-                                  LocalDate from, LocalDate to) {
-        int pageSize = paginationProperties.clampSize(limit);
+    public PageResponse<AuditFeedItem> feed(int page, int size, String entityType, Long entityId,
+                                            Long runId, String runType, String action,
+                                            String actor, LocalDate from, LocalDate to) {
         Specification<AuditLog> spec = filterSpec(entityType, entityId, runId, runType)
                 .and(refinementSpec(action, actor, from, to));
-        if (cursor != null && !cursor.isBlank()) {
-            spec = spec.and(keysetAfter(decodeCursor(cursor)));
-        }
+        PageRequest pageRequest = PageRequest.of(paginationProperties.clampPage(page),
+                paginationProperties.clampSize(size),
+                Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
 
-        // fetch one extra row to know whether a next page exists
-        List<AuditLog> rows = auditLogRepository.findAll(spec,
-                PageRequest.of(0, pageSize + 1,
-                        Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")))).getContent();
-        boolean hasMore = rows.size() > pageSize;
-        List<AuditLog> page = hasMore ? rows.subList(0, pageSize) : rows;
-
-        Map<Long, Map<String, Object>> runSummaries = loadRunSummaries(page);
-        List<AuditFeedItem> items = page.stream().map(row -> toItem(row, runSummaries)).toList();
-        String nextCursor = hasMore ? encodeCursor(page.getLast()) : null;
-        return new AuditFeedResponse(items, nextCursor);
+        Page<AuditLog> rows = auditLogRepository.findAll(spec, pageRequest);
+        Map<Long, Map<String, Object>> runSummaries = loadRunSummaries(rows.getContent());
+        return PageResponse.from(rows, row -> toItem(row, runSummaries));
     }
 
     /**
@@ -113,7 +105,7 @@ public class AuditService {
 
     /**
      * User-facing feed filters; conjunctive, so they compose with any base view
-     * and with the keyset cursor unchanged. Dates are inclusive whole days.
+     * and the page window. Dates are inclusive whole days.
      */
     private Specification<AuditLog> refinementSpec(String action, String actor,
                                                    LocalDate from, LocalDate to) {
@@ -146,13 +138,6 @@ public class AuditService {
             }
         }
         throw new ValidationException("Unknown " + param + " '" + value + "'");
-    }
-
-    private Specification<AuditLog> keysetAfter(Cursor cursor) {
-        return (root, q, cb) -> cb.or(
-                cb.lessThan(root.get("createdAt"), cursor.createdAt()),
-                cb.and(cb.equal(root.get("createdAt"), cursor.createdAt()),
-                        cb.lessThan(root.get("id"), cursor.id())));
     }
 
     /** Batch-load run rows referenced by the page's RUN_COMPLETED headers. */
@@ -202,23 +187,5 @@ public class AuditService {
                 row.getEntityType(), row.getEntityId(), row.getAction(), row.getActor(),
                 changedFields, row.getRefTable(), row.getRefId(), row.getRunId(),
                 summary, row.getCreatedAt());
-    }
-
-    private record Cursor(LocalDateTime createdAt, Long id) {
-    }
-
-    private String encodeCursor(AuditLog last) {
-        return Base64.getUrlEncoder().encodeToString(
-                (last.getCreatedAt() + "|" + last.getId()).getBytes(StandardCharsets.UTF_8));
-    }
-
-    private Cursor decodeCursor(String cursor) {
-        try {
-            String[] parts = new String(Base64.getUrlDecoder().decode(cursor),
-                    StandardCharsets.UTF_8).split("\\|");
-            return new Cursor(LocalDateTime.parse(parts[0]), Long.parseLong(parts[1]));
-        } catch (RuntimeException e) {
-            throw new ValidationException("Malformed cursor");
-        }
     }
 }

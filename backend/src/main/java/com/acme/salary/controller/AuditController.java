@@ -1,6 +1,7 @@
 package com.acme.salary.controller;
 
-import com.acme.salary.dto.response.AuditFeedResponse;
+import com.acme.salary.dto.response.AuditFeedItem;
+import com.acme.salary.dto.response.PageResponse;
 import com.acme.salary.service.AuditService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -19,8 +20,8 @@ public class AuditController {
     private final AuditService auditService;
 
     @GetMapping
-    public AuditFeedResponse feed(@RequestParam(required = false) String cursor,
-                                  @RequestParam(defaultValue = "20") int limit,
+    public PageResponse<AuditFeedItem> feed(@RequestParam(defaultValue = "0") int page,
+                                  @RequestParam(defaultValue = "20") int size,
                                   @RequestParam(required = false) String entityType,
                                   @RequestParam(required = false) Long entityId,
                                   @RequestParam(required = false) Long runId,
@@ -31,7 +32,7 @@ public class AuditController {
                                   @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
                                   @RequestParam(required = false)
                                   @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-        return auditService.feed(cursor, limit, entityType, entityId, runId, runType,
+        return auditService.feed(page, size, entityType, entityId, runId, runType,
                 action, actor, from, to);
     }
 }
