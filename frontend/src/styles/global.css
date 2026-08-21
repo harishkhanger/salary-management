@@ -326,7 +326,29 @@ a:hover {
 
 .pagination-controls {
   display: flex;
+  align-items: center;
   gap: 6px;
+}
+
+.pagination-jump {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 6px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+.pagination-jump-input {
+  width: 68px;
+  padding: 4px 8px;
+  font-size: 12.5px;
+  -moz-appearance: textfield;
+}
+.pagination-jump-input::-webkit-outer-spin-button,
+.pagination-jump-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 /* ---------- app shell ---------- */
