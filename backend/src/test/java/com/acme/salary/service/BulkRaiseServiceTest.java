@@ -129,7 +129,7 @@ class BulkRaiseServiceTest {
                         LocalDateTime.now(FIXED).minusDays(30))));
 
         BulkRaisePreviewResponse preview = service.preview(
-                new BulkRaisePreviewRequest(RaiseType.PERCENT, new BigDecimal("10"), "India", null));
+                new BulkRaisePreviewRequest(RaiseType.PERCENT, new BigDecimal("10"), "India", null, null));
 
         assertThat(preview.affectedCount()).isEqualTo(3);
         var inr = preview.costImpact().stream()
@@ -153,10 +153,52 @@ class BulkRaiseServiceTest {
                 .thenReturn(List.of());
 
         BulkRaisePreviewResponse preview = service.preview(
-                new BulkRaisePreviewRequest(RaiseType.AMOUNT, new BigDecimal("5000"), null, "Sales"));
+                new BulkRaisePreviewRequest(RaiseType.AMOUNT, new BigDecimal("5000"), null, "Sales", null));
 
         assertThat(preview.costImpact().getFirst().proposed()).isEqualByComparingTo("420000.00");
         assertThat(preview.costImpactUsdDelta()).isEqualByComparingTo("20000.00");
+    }
+
+    @Test
+    void previewForHandPickedEmployeesUsesTheirAggregateAndIgnoresFilters() {
+        when(employeeRepository.aggregateCohortByCurrencyIn(List.of(7L, 8L))).thenReturn(List.of(
+                new CurrencyCohortAggregate("USD", 2L, new BigDecimal("200000.00"))));
+        when(currencyRateRepository.findAll()).thenReturn(List.of(rate("USD", "1.000000")));
+        stubThreshold("30");
+        // flag list comes back org-wide and is narrowed to the picked ids
+        when(salaryChangeRepository.findOverThreshold(isNull(), isNull(), any(BigDecimal.class)))
+                .thenReturn(List.of(
+                        new OverThresholdAggregate(7L, "EMP-00007", "Asha Rao", new BigDecimal("140000.00"),
+                                new BigDecimal("100000.00"), LocalDateTime.now(FIXED)),
+                        new OverThresholdAggregate(99L, "EMP-00099", "Someone Else", new BigDecimal("140000.00"),
+                                new BigDecimal("100000.00"), LocalDateTime.now(FIXED))));
+
+        BulkRaisePreviewResponse preview = service.preview(new BulkRaisePreviewRequest(
+                RaiseType.PERCENT, new BigDecimal("10"), "India", "Sales", List.of(7L, 8L)));
+
+        assertThat(preview.affectedCount()).isEqualTo(2);
+        assertThat(preview.costImpactUsdDelta()).isEqualByComparingTo("20000.00");
+        assertThat(preview.overThreshold()).extracting(o -> o.employeeId()).containsExactly(7L);
+        verify(employeeRepository, never()).aggregateCohortByCurrency(any(), any());
+    }
+
+    @Test
+    void processRunWithHandPickedCohortTouchesOnlyThoseEmployees() {
+        stubRunSave();
+        BulkRaiseRun run = queuedRun(null);
+        run.setEmployeeIds("[5,6]");
+        when(employeeRepository.findCohortIdsIn(List.of(5L, 6L))).thenReturn(List.of(5L, 6L));
+        when(salaryChangeRepository.findEmployeeIdsByRun(9L)).thenReturn(List.of());
+        when(raiseReviewItemRepository.findEmployeeIdsByRun(9L)).thenReturn(List.of());
+        when(itemProcessor.process(eq(5L), any(), any(), eq(9L), eq("hr")))
+                .thenReturn(SalaryChangeOutcome.applied(null, null));
+        when(itemProcessor.process(eq(6L), any(), any(), eq(9L), eq("hr")))
+                .thenReturn(SalaryChangeOutcome.applied(null, null));
+
+        service.processRun(run);
+
+        assertThat(run.getAppliedCount()).isEqualTo(2);
+        verify(employeeRepository, never()).findCohortIds(any(), any());
     }
 
     // --- queue ---
@@ -166,7 +208,7 @@ class BulkRaiseServiceTest {
         stubRunSave();
 
         BulkRaiseRunResponse response = service.queue(new BulkRaiseExecuteRequest(
-                RaiseType.PERCENT, new BigDecimal("5"), "India", null, List.of(2L)), "hr");
+                RaiseType.PERCENT, new BigDecimal("5"), "India", null, List.of(2L), null), "hr");
 
         assertThat(response.id()).isEqualTo(9L);
         assertThat(response.status()).isEqualTo(JobStatus.QUEUED);

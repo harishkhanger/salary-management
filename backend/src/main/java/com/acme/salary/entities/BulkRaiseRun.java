@@ -64,6 +64,10 @@ public class BulkRaiseRun {
     @Column(name = "excluded_ids", columnDefinition = "json")
     private String excludedIds;
 
+    /** Hand-picked cohort (JSON array of employee ids); null = filter-based cohort. */
+    @Column(name = "employee_ids", columnDefinition = "json")
+    private String employeeIds;
+
     @Column(name = "initiated_by", nullable = false, length = 50)
     private String initiatedBy;
 

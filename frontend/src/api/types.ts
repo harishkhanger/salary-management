@@ -65,14 +65,24 @@ export interface BulkRaiseRun {
   appliedCount: number
   reviewCount: number
   excludedCount: number
+  selectedCount: number
   initiatedBy: string
   createdAt: string
+}
+
+/** What the directory hands to the raise flow for a hand-picked cohort. */
+export interface PickedEmployee {
+  id: number
+  name: string
+  employeeCode: string
 }
 
 export interface BulkRaisePreview {
   affectedCount: number
   costImpact: { currencyCode: string; current: number; proposed: number; delta: number }[]
   costImpactUsdDelta: number
+  costImpactUsdCurrent: number
+  costImpactUsdProposed: number
   overThreshold: { employeeId: number; employeeCode: string; name: string; totalRaisePercent: number; lastRaiseAt: string }[]
 }
 

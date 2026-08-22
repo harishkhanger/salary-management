@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { get, post } from '../api/client'
 import { humanize } from '../api/errors'
 import type {
@@ -10,6 +10,7 @@ import type {
   Employee,
   JobStatus,
   Page,
+  PickedEmployee,
   RaiseType,
   Settings,
 } from '../api/types'
@@ -30,7 +31,12 @@ function raiseLabel(type: RaiseType | null, value: string | number): string {
   return type === 'PERCENT' ? `${value}% raise` : `flat ${formatMoney(Number(value))} raise`
 }
 
-function scopeLabel(country: string, department: string): string {
+function scopeLabel(country: string, department: string, picked: PickedEmployee[] = []): string {
+  if (picked.length > 0) {
+    // name them: "— Aarav Al-Farsi (EMP-04659), Priya Nair (EMP-00012) and 3 more"
+    const names = picked.slice(0, 3).map((p) => `${p.name} (${p.employeeCode})`).join(', ')
+    return `— ${names}${picked.length > 3 ? ` and ${(picked.length - 3).toLocaleString()} more` : ''}`
+  }
   const parts = [country, department].filter(Boolean)
   return parts.length ? `in ${parts.join(' · ')}` : 'across the whole organisation'
 }
@@ -46,9 +52,16 @@ export function raiseOutcome(run: BulkRaiseRun): string {
 
 export default function BulkRaisesPage() {
   const toast = useToast()
+  const location = useLocation()
+  const handedOver = (location.state as { employees?: PickedEmployee[] } | null)?.employees ?? []
 
   // --- wizard ---
   const [step, setStep] = useState<Step>(1)
+  // who: a filter cohort, or specific people (from the directory or searched here)
+  const [mode, setMode] = useState<'filters' | 'people'>(handedOver.length ? 'people' : 'filters')
+  const [picked, setPicked] = useState<PickedEmployee[]>(handedOver)
+  const [personSearch, setPersonSearch] = useState('')
+  const [personHits, setPersonHits] = useState<Employee[]>([])
   const [country, setCountry] = useState('')
   const [department, setDepartment] = useState('')
   const [countryOptions, setCountryOptions] = useState<string[]>([])
@@ -88,6 +101,10 @@ export default function BulkRaisesPage() {
 
   // live headcount for the chosen scope (held employees included: holds block payout, not raises)
   useEffect(() => {
+    if (mode === 'people') {
+      setHeadcount(picked.length)
+      return
+    }
     setHeadcount(null)
     get<Page<Employee>>('/employees', {
       page: 0,
@@ -95,7 +112,25 @@ export default function BulkRaisesPage() {
       country: country || undefined,
       department: department || undefined,
     }).then((p) => setHeadcount(p.totalElements))
-  }, [country, department])
+  }, [country, department, mode, picked.length])
+
+  // people search for the hand-picked mode (debounced, top 8)
+  useEffect(() => {
+    if (mode !== 'people' || personSearch.trim().length < 2) {
+      setPersonHits([])
+      return
+    }
+    const t = setTimeout(() => {
+      get<Page<Employee>>('/employees', { page: 0, size: 8, search: personSearch.trim() }).then((p) => setPersonHits(p.content))
+    }, 250)
+    return () => clearTimeout(t)
+  }, [mode, personSearch])
+
+  const addPerson = (e: Employee) => {
+    if (!picked.some((p) => p.id === e.id)) setPicked([...picked, { id: e.id, name: e.name, employeeCode: e.employeeCode }])
+    setPersonSearch('')
+  }
+  const pickedForRequest = mode === 'people' ? picked : []
 
   const loadRuns = useCallback(() => {
     get<Page<BulkRaiseRun>>('/bulk-raises', { page: runsPage, size: 10 }).then(setRuns)
@@ -134,8 +169,9 @@ export default function BulkRaisesPage() {
   const requestBody = () => ({
     raiseType,
     value: amount,
-    filterCountry: country || undefined,
-    filterDepartment: department || undefined,
+    filterCountry: mode === 'filters' && country ? country : undefined,
+    filterDepartment: mode === 'filters' && department ? department : undefined,
+    employeeIds: pickedForRequest.length ? pickedForRequest.map((p) => p.id) : undefined,
   })
 
   const goToReview = async () => {
@@ -173,6 +209,8 @@ export default function BulkRaisesPage() {
     setExcluded(new Set())
     setRaiseType(null)
     setValue('')
+    setPicked([])
+    setMode('filters')
     setStep(1)
   }
 
@@ -278,33 +316,84 @@ export default function BulkRaisesPage() {
           {step === 1 && (
             <>
               <h3 style={{ marginBottom: 6 }}>Who gets the raise?</h3>
-              <p className="muted" style={{ marginTop: 0 }}>
-                Leave both blank for everyone. Employees on salary hold are included — a hold stops payout, not pay changes.
-              </p>
-              <div className="toolbar" style={{ marginBottom: 16 }}>
-                <select className="select" value={country} onChange={(e) => setCountry(e.target.value)}>
-                  <option value="">All countries</option>
-                  {countryOptions.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-                <select className="select" value={department} onChange={(e) => setDepartment(e.target.value)}>
-                  <option value="">All departments</option>
-                  {departmentOptions.map((d) => (
-                    <option key={d} value={d}>
-                      {d}
-                    </option>
-                  ))}
-                </select>
+              <div className="choice-grid" style={{ marginBottom: 14 }}>
+                <button type="button" className={`choice${mode === 'filters' ? ' selected' : ''}`} onClick={() => setMode('filters')}>
+                  <div className="choice-title">A group</div>
+                  <div className="choice-desc">Everyone, or a country and/or a department</div>
+                </button>
+                <button type="button" className={`choice${mode === 'people' ? ' selected' : ''}`} onClick={() => setMode('people')}>
+                  <div className="choice-title">Specific people</div>
+                  <div className="choice-desc">One employee or a hand-picked list — search here, or tick them in the directory</div>
+                </button>
               </div>
+              {mode === 'filters' ? (
+                <>
+                  <p className="muted" style={{ marginTop: 0 }}>
+                    Leave both blank for everyone. Employees on salary hold are included — a hold stops payout, not pay changes.
+                  </p>
+                  <div className="toolbar" style={{ marginBottom: 16 }}>
+                    <select className="select" value={country} onChange={(e) => setCountry(e.target.value)}>
+                      <option value="">All countries</option>
+                      {countryOptions.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                    <select className="select" value={department} onChange={(e) => setDepartment(e.target.value)}>
+                      <option value="">All departments</option>
+                      {departmentOptions.map((d) => (
+                        <option key={d} value={d}>
+                          {d}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              ) : (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ position: 'relative', maxWidth: 360 }}>
+                    <input
+                      className="input"
+                      placeholder="Search by name or code to add someone…"
+                      value={personSearch}
+                      onChange={(e) => setPersonSearch(e.target.value)}
+                      autoFocus
+                    />
+                    {personHits.length > 0 && (
+                      <ul className="suggest">
+                        {personHits.map((e) => (
+                          <li key={e.id}>
+                            <button type="button" onClick={() => addPerson(e)} disabled={picked.some((p) => p.id === e.id)}>
+                              <strong>{e.name}</strong> <span className="muted">{e.employeeCode} · {e.department} · {e.country}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  <div className="chips" style={{ marginTop: 10 }}>
+                    {picked.map((p) => (
+                      <span key={p.id} className="chip on">
+                        {p.name} <span className="muted">{p.employeeCode}</span>
+                        <button type="button" className="chip-x" aria-label={`Remove ${p.name}`} onClick={() => setPicked(picked.filter((x) => x.id !== p.id))}>
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                    {picked.length === 0 && <span className="muted">Nobody picked yet.</span>}
+                  </div>
+                  <p className="muted" style={{ fontSize: 12.5 }}>
+                    Tip: in the <Link to="/employees">employee directory</Link> you can tick people across pages and press “Give a raise”.
+                  </p>
+                </div>
+              )}
               <p className="lead">
                 {headcount === null ? (
                   'Counting…'
                 ) : (
                   <>
-                    This raise will apply to <strong>{plural(headcount, 'employee')}</strong> {scopeLabel(country, department)}.
+                    This raise will apply to <strong>{plural(headcount, 'employee')}</strong> {scopeLabel(country, department, pickedForRequest)}.
                   </>
                 )}
               </p>
@@ -357,7 +446,7 @@ export default function BulkRaisesPage() {
               {whatValid && (
                 <p className="lead" style={{ marginTop: 12 }}>
                   A <strong>{raiseLabel(raiseType, value)}</strong> for {plural(headcount ?? 0, 'employee')}{' '}
-                  {scopeLabel(country, department)}.
+                  {scopeLabel(country, department, pickedForRequest)}.
                 </p>
               )}
               <div className="card-actions">
@@ -377,9 +466,25 @@ export default function BulkRaisesPage() {
               <h3 style={{ marginBottom: 6 }}>Review the impact</h3>
               <p className="lead">
                 A <strong>{raiseLabel(raiseType, value)}</strong> for <strong>{plural(preview.affectedCount, 'employee')}</strong>{' '}
-                {scopeLabel(country, department)} adds about <strong>${formatMoney(preview.costImpactUsdDelta)}</strong> a
+                {scopeLabel(country, department, pickedForRequest)} adds about <strong>${formatMoney(preview.costImpactUsdDelta)}</strong> a
                 year to payroll.
               </p>
+              <div className="stat-row" style={{ marginBottom: 14 }}>
+                <div className="stat">
+                  <div className="stat-label">Annual payroll now (USD)</div>
+                  <div className="stat-value">${formatMoney(preview.costImpactUsdCurrent)}</div>
+                </div>
+                <div className="stat">
+                  <div className="stat-label">This raise adds</div>
+                  <div className="stat-value" style={{ color: 'var(--success)' }}>
+                    +${formatMoney(preview.costImpactUsdDelta)}
+                  </div>
+                </div>
+                <div className="stat">
+                  <div className="stat-label">Annual payroll after (USD)</div>
+                  <div className="stat-value">${formatMoney(preview.costImpactUsdProposed)}</div>
+                </div>
+              </div>
               <div className="table-wrap">
                 <table className="table">
                   <thead>
@@ -486,9 +591,10 @@ export default function BulkRaisesPage() {
               <h3 style={{ marginBottom: 6 }}>Confirm</h3>
               <p className="lead">
                 Apply a <strong>{raiseLabel(raiseType, value)}</strong> to <strong>{plural(willApplyTo, 'employee')}</strong>{' '}
-                {scopeLabel(country, department)}
+                {scopeLabel(country, department, pickedForRequest)}
                 {excluded.size > 0 && <> ({excluded.size.toLocaleString()} excluded)</>}, adding about $
-                {formatMoney(preview.costImpactUsdDelta)} a year.
+                {formatMoney(preview.costImpactUsdDelta)} a year — this group's annual payroll goes from $
+                {formatMoney(preview.costImpactUsdCurrent)} to <strong>${formatMoney(preview.costImpactUsdProposed)}</strong>.
               </p>
               <p className="muted">
                 Anyone whose total raises in the last twelve months would go past {threshold ?? 30}% is not changed — their
@@ -540,7 +646,9 @@ export default function BulkRaisesPage() {
                       {run.raiseType === 'PERCENT' ? `${run.raiseValue}%` : `+${formatMoney(run.raiseValue)}`}
                     </td>
                     <td className="muted">
-                      {[run.filterCountry, run.filterDepartment].filter(Boolean).join(' · ') || 'Whole organisation'}
+                      {run.selectedCount > 0
+                        ? `${run.selectedCount.toLocaleString()} hand-picked ${run.selectedCount === 1 ? 'person' : 'people'}`
+                        : [run.filterCountry, run.filterDepartment].filter(Boolean).join(' · ') || 'Whole organisation'}
                     </td>
                     <td>{raiseOutcome(run)}</td>
                     <td>{run.initiatedBy}</td>

@@ -6,8 +6,9 @@ import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
 
 import java.math.BigDecimal;
+import java.util.List;
 
-/** No filters = the whole org. */
+/** No filters and no employeeIds = the whole org; employeeIds = exactly those people (filters ignored). */
 public record BulkRaisePreviewRequest(
         @NotNull
         RaiseType raiseType,
@@ -16,6 +17,10 @@ public record BulkRaisePreviewRequest(
         BigDecimal value,
 
         String filterCountry,
-        String filterDepartment
+        String filterDepartment,
+        List<Long> employeeIds
 ) {
+    public List<Long> employeeIdsOrEmpty() {
+        return employeeIds == null ? List.of() : employeeIds;
+    }
 }

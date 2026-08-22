@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { get } from '../api/client'
-import type { Employee, Page } from '../api/types'
+import type { Employee, Page, PickedEmployee } from '../api/types'
 import { useToast } from '../components/Toaster'
 import { Pagination, StatusTag, formatMoney } from '../components/ui'
 
@@ -17,6 +17,22 @@ export default function EmployeeDirectoryPage() {
   const [status, setStatus] = useState('')
   // guards against out-of-order responses painting stale results
   const requestSeq = useRef(0)
+
+  // hand-picked employees for a raise; survives paging and filtering
+  const [picked, setPicked] = useState<Map<number, PickedEmployee>>(new Map())
+  const togglePick = (e: Employee) => {
+    const next = new Map(picked)
+    if (next.has(e.id)) next.delete(e.id)
+    else next.set(e.id, { id: e.id, name: e.name, employeeCode: e.employeeCode })
+    setPicked(next)
+  }
+  const pageAllPicked = !!data && data.content.length > 0 && data.content.every((e) => picked.has(e.id))
+  const togglePage = () => {
+    const next = new Map(picked)
+    if (pageAllPicked) data?.content.forEach((e) => next.delete(e.id))
+    else data?.content.forEach((e) => next.set(e.id, { id: e.id, name: e.name, employeeCode: e.employeeCode }))
+    setPicked(next)
+  }
 
   // draft filter inputs apply on Enter / Apply, never per keystroke
   const [draft, setDraft] = useState({ search: '', country: '', department: '' })
@@ -63,6 +79,30 @@ export default function EmployeeDirectoryPage() {
           + Add employee
         </button>
       </div>
+
+      {picked.size > 0 && (
+        <div className="selection-bar">
+          <span>
+            <strong>{picked.size.toLocaleString()}</strong> selected
+            <span className="muted">
+              {' '}
+              · {[...picked.values()].slice(0, 3).map((p) => p.name).join(', ')}
+              {picked.size > 3 ? ` and ${picked.size - 3} more` : ''}
+            </span>
+          </span>
+          <span style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-sm" onClick={() => setPicked(new Map())}>
+              Clear
+            </button>
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => navigate('/bulk-raises', { state: { employees: [...picked.values()] } })}
+            >
+              Give a raise to {picked.size === 1 ? [...picked.values()][0].name : `${picked.size} people`} →
+            </button>
+          </span>
+        </div>
+      )}
 
       <div className="card">
         <form
@@ -116,6 +156,9 @@ export default function EmployeeDirectoryPage() {
           <table className="table">
             <thead>
               <tr>
+                <th style={{ width: 36 }}>
+                  <input type="checkbox" checked={pageAllPicked} onChange={togglePage} aria-label="Select everyone on this page" />
+                </th>
                 <th>Code</th>
                 <th>Name</th>
                 <th>Email</th>
@@ -128,19 +171,22 @@ export default function EmployeeDirectoryPage() {
             <tbody>
               {loading && !data ? (
                 <tr>
-                  <td colSpan={7} className="table-empty">
+                  <td colSpan={8} className="table-empty">
                     Loading…
                   </td>
                 </tr>
               ) : data && data.content.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="table-empty">
+                  <td colSpan={8} className="table-empty">
                     No employees match these filters
                   </td>
                 </tr>
               ) : (
                 data?.content.map((e) => (
-                  <tr key={e.id}>
+                  <tr key={e.id} className={picked.has(e.id) ? 'row-picked' : ''}>
+                    <td>
+                      <input type="checkbox" checked={picked.has(e.id)} onChange={() => togglePick(e)} aria-label={`Select ${e.name}`} />
+                    </td>
                     <td>
                       <Link to={`/employees/${e.id}`}>{e.employeeCode}</Link>
                     </td>

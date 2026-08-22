@@ -82,14 +82,17 @@ public class BulkRaiseService {
      * across their whole history, flagged for optional exclusion.
      */
     public BulkRaisePreviewResponse preview(BulkRaisePreviewRequest request) {
-        List<CurrencyCohortAggregate> aggregates = employeeRepository
-                .aggregateCohortByCurrency(blankToNull(request.filterCountry()),
-                        blankToNull(request.filterDepartment()));
+        List<Long> picked = request.employeeIdsOrEmpty();
+        List<CurrencyCohortAggregate> aggregates = picked.isEmpty()
+                ? employeeRepository.aggregateCohortByCurrency(blankToNull(request.filterCountry()),
+                        blankToNull(request.filterDepartment()))
+                : employeeRepository.aggregateCohortByCurrencyIn(picked);
         Map<String, BigDecimal> usdRates = currencyRateRepository.findAll().stream()
                 .collect(Collectors.toMap(CurrencyRate::getCode, CurrencyRate::getUsdRate));
 
         long affectedCount = 0;
         BigDecimal usdDelta = BigDecimal.ZERO;
+        BigDecimal usdCurrent = BigDecimal.ZERO;
         List<CostImpactEntry> costImpact = new java.util.ArrayList<>();
         for (CurrencyCohortAggregate aggregate : aggregates) {
             BigDecimal proposed = proposedTotal(aggregate, request.raiseType(), request.value());
@@ -100,16 +103,24 @@ public class BulkRaiseService {
             // usd_rate convention: local units per 1 USD -> USD = local / rate
             usdDelta = usdDelta.add(delta.divide(usdRates.get(aggregate.currencyCode()),
                     2, RoundingMode.HALF_UP));
+            usdCurrent = usdCurrent.add(aggregate.totalSalary().divide(usdRates.get(aggregate.currencyCode()),
+                    2, RoundingMode.HALF_UP));
         }
 
         BigDecimal threshold = orgSettingsRepository.findById(1L)
                 .orElseThrow(() -> new IllegalStateException("org_settings row missing"))
                 .getRaiseThresholdPercent();
+        // a hand-picked cohort ignores the filters; the flag list is narrowed to the picked ids
+        Set<Long> pickedSet = new HashSet<>(picked);
         List<OverThresholdEmployee> overThreshold = salaryChangeRepository.findOverThreshold(
-                        blankToNull(request.filterCountry()), blankToNull(request.filterDepartment()), threshold)
-                .stream().map(this::toOverThreshold).toList();
+                        picked.isEmpty() ? blankToNull(request.filterCountry()) : null,
+                        picked.isEmpty() ? blankToNull(request.filterDepartment()) : null, threshold)
+                .stream()
+                .filter(a -> picked.isEmpty() || pickedSet.contains(a.employeeId()))
+                .map(this::toOverThreshold).toList();
 
-        return new BulkRaisePreviewResponse(affectedCount, costImpact, usdDelta, overThreshold);
+        return new BulkRaisePreviewResponse(affectedCount, costImpact, usdDelta, usdCurrent,
+                usdCurrent.add(usdDelta), overThreshold);
     }
 
     /** Persists the job record and returns immediately (202); the poller executes it. */
@@ -120,6 +131,7 @@ public class BulkRaiseService {
                 .filterCountry(blankToNull(request.filterCountry()))
                 .filterDepartment(blankToNull(request.filterDepartment()))
                 .excludedIds(toJson(request.excludedEmployeeIdsOrEmpty()))
+                .employeeIds(toJson(request.employeeIdsOrEmpty()))
                 .initiatedBy(actor)
                 .status(JobStatus.QUEUED)
                 .createdAt(LocalDateTime.now(clock))
@@ -136,8 +148,11 @@ public class BulkRaiseService {
         run.setStatus(JobStatus.RUNNING);
         bulkRaiseRunRepository.save(run);
 
-        List<Long> cohortIds = employeeRepository.findCohortIds(
-                run.getFilterCountry(), run.getFilterDepartment());
+        // hand-picked cohort (persisted on the run) or the filter-based one
+        List<Long> picked = fromJson(run.getEmployeeIds());
+        List<Long> cohortIds = picked.isEmpty()
+                ? employeeRepository.findCohortIds(run.getFilterCountry(), run.getFilterDepartment())
+                : employeeRepository.findCohortIdsIn(picked);
         Set<Long> excluded = new HashSet<>(fromJson(run.getExcludedIds()));
         Set<Long> alreadyProcessed = new HashSet<>(
                 salaryChangeRepository.findEmployeeIdsByRun(run.getId()));

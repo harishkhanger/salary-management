@@ -18,9 +18,14 @@ public record BulkRaiseExecuteRequest(
 
         String filterCountry,
         String filterDepartment,
-        List<Long> excludedEmployeeIds
+        List<Long> excludedEmployeeIds,
+        List<Long> employeeIds
 ) {
     public List<Long> excludedEmployeeIdsOrEmpty() {
         return excludedEmployeeIds == null ? List.of() : excludedEmployeeIds;
+    }
+
+    public List<Long> employeeIdsOrEmpty() {
+        return employeeIds == null ? List.of() : employeeIds;
     }
 }

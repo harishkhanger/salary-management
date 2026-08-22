@@ -28,6 +28,20 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, JpaSp
     List<Long> findCohortIds(@Param("country") String country,
                              @Param("department") String department);
 
+    /** Hand-picked bulk-raise cohort: the chosen employees that still exist. */
+    @Query("SELECT e.id FROM Employee e WHERE e.deleted = false AND e.id IN :ids")
+    List<Long> findCohortIdsIn(@Param("ids") List<Long> ids);
+
+    /** Preview cost impact for a hand-picked cohort, aggregated in the database. */
+    @Query("""
+            SELECT new com.acme.salary.dto.CurrencyCohortAggregate(
+                e.currencyCode, COUNT(e.id), SUM(e.annualSalary))
+            FROM Employee e
+            WHERE e.deleted = false AND e.id IN :ids
+            GROUP BY e.currencyCode
+            """)
+    List<CurrencyCohortAggregate> aggregateCohortByCurrencyIn(@Param("ids") List<Long> ids);
+
     /**
      * Bulk-raise preview cost impact: headcount + salary totals per currency,
      * aggregated in the database — the 10k rows are never loaded.

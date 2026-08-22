@@ -17,6 +17,8 @@ public record BulkRaiseRunResponse(
         int appliedCount,
         int reviewCount,
         int excludedCount,
+        /** Size of the hand-picked cohort; 0 when the run used filters. */
+        int selectedCount,
         String initiatedBy,
         LocalDateTime createdAt
 ) {
@@ -24,6 +26,14 @@ public record BulkRaiseRunResponse(
         return new BulkRaiseRunResponse(run.getId(), run.getRaiseType(), run.getRaiseValue(),
                 run.getFilterCountry(), run.getFilterDepartment(), run.getStatus(),
                 run.getAppliedCount(), run.getReviewCount(), run.getExcludedCount(),
-                run.getInitiatedBy(), run.getCreatedAt());
+                countIds(run.getEmployeeIds()), run.getInitiatedBy(), run.getCreatedAt());
+    }
+
+    /** Cheap count of a JSON id array without a parser dependency here. */
+    private static int countIds(String json) {
+        if (json == null || json.isBlank() || json.trim().equals("[]")) {
+            return 0;
+        }
+        return json.split(",").length;
     }
 }
