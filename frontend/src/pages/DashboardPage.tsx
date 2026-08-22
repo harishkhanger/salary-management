@@ -3,6 +3,7 @@ import { get } from '../api/client'
 import { humanize } from '../api/errors'
 import type { AnalyticsSummary, CountrySpend, DepartmentStats, SalaryDistribution } from '../api/types'
 import { useToast } from '../components/Toaster'
+import PayStatsSection from '../components/PayStatsSection'
 import { Spinner, formatDateTime, formatMoney } from '../components/ui'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -95,7 +96,6 @@ export default function DashboardPage() {
   if (!summary || !countries || !departments || !distribution) return <Spinner />
 
   const maxCountrySpend = Math.max(...countries.map((c) => c.monthlySpendUsd), 1)
-  const maxDeptValue = Math.max(...departments.map((d) => Math.max(d.avgAnnualUsd, d.medianAnnualUsd)), 1)
 
   const buckets = distribution.buckets
   const maxBucket = Math.max(...buckets.map((b) => b.count), 1)
@@ -362,53 +362,26 @@ export default function DashboardPage() {
           ))}
         </div>
       </div>
-      <div className="chart-row">
-        <div className="card resizable">
-          <h3 style={{ marginBottom: 12 }}>Monthly spend by country (USD)</h3>
-          {countries.map((c, i) => (
-            <div key={c.country} className="bar-row">
-              <span className="bar-label">{c.country}</span>
-              <div className="bar-track">
-                <div
-                  className="bar-fill"
-                  style={{
-                    width: `${(c.monthlySpendUsd / maxCountrySpend) * 100}%`,
-                    background: PALETTE[i % PALETTE.length],
-                  }}
-                />
-              </div>
-              <span className="bar-value">{formatMoney(c.monthlySpendUsd)}</span>
+      <div className="card">
+        <h3 style={{ marginBottom: 12 }}>Monthly spend by country (USD)</h3>
+        {countries.map((c, i) => (
+          <div key={c.country} className="bar-row">
+            <span className="bar-label">{c.country}</span>
+            <div className="bar-track">
+              <div
+                className="bar-fill"
+                style={{
+                  width: `${(c.monthlySpendUsd / maxCountrySpend) * 100}%`,
+                  background: PALETTE[i % PALETTE.length],
+                }}
+              />
             </div>
-          ))}
-        </div>
-
-        <div className="card resizable">
-          <h3 style={{ marginBottom: 4 }}>Pay by department (annual USD)</h3>
-          <p className="muted" style={{ marginTop: 0, fontSize: 12.5 }}>
-            Purple = average · Green = median — a gap signals outlier skew
-          </p>
-          {departments.map((d) => (
-            <div key={d.department} style={{ marginBottom: 8 }}>
-              <div className="bar-row" style={{ padding: '2px 0' }}>
-                <span className="bar-label">
-                  {d.department} <span className="muted">({d.headcount.toLocaleString()})</span>
-                </span>
-                <div className="bar-track" style={{ height: 10 }}>
-                  <div className="bar-fill" style={{ width: `${(d.avgAnnualUsd / maxDeptValue) * 100}%` }} />
-                </div>
-                <span className="bar-value">avg {formatMoney(d.avgAnnualUsd)}</span>
-              </div>
-              <div className="bar-row" style={{ padding: '2px 0' }}>
-                <span className="bar-label" />
-                <div className="bar-track" style={{ height: 10 }}>
-                  <div className="bar-fill alt" style={{ width: `${(d.medianAnnualUsd / maxDeptValue) * 100}%` }} />
-                </div>
-                <span className="bar-value">median {formatMoney(d.medianAnnualUsd)}</span>
-              </div>
-            </div>
-          ))}
-        </div>
+            <span className="bar-value">{formatMoney(c.monthlySpendUsd)}</span>
+          </div>
+        ))}
       </div>
+
+      <PayStatsSection countryOptions={countryOptions} departmentOptions={departmentOptions} />
     </div>
   )
 }

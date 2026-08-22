@@ -2,6 +2,7 @@ package com.acme.salary.controller;
 
 import com.acme.salary.dto.response.AnalyticsResponses.CountrySpend;
 import com.acme.salary.dto.response.AnalyticsResponses.DepartmentStats;
+import com.acme.salary.dto.response.AnalyticsResponses.PayStats;
 import com.acme.salary.dto.response.AnalyticsResponses.Distribution;
 import com.acme.salary.dto.response.AnalyticsResponses.Summary;
 import com.acme.salary.service.AnalyticsService;
@@ -36,6 +37,14 @@ public class AnalyticsController {
     public List<DepartmentStats> byDepartment(@RequestParam(required = false) String country,
                                               @RequestParam(required = false) String department) {
         return analyticsService.byDepartment(country, department);
+    }
+
+    /** ?groupBy=country|department&countries=India,Germany&department=Engineering */
+    @GetMapping("/pay-stats")
+    public List<PayStats> payStats(@RequestParam(defaultValue = "country") String groupBy,
+                                   @RequestParam(required = false) List<String> countries,
+                                   @RequestParam(required = false) String department) {
+        return analyticsService.payStats(groupBy, countries, department);
     }
 
     @GetMapping("/salary-distribution")

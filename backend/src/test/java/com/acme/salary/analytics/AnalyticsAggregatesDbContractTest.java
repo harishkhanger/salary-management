@@ -140,6 +140,27 @@ class AnalyticsAggregatesDbContractTest {
         assertThat(AnalyticsService.defaultRangeBucket(37000)).isEqualTo(2000);
     }
 
+    @Test
+    void payStatsGiveMinMaxAverageAndMedianPerGroupWithFilters() {
+        // US Engineering: 60k, 100k, 140k ; India Sales: 50k, 100k (INR normalized)
+        List<AnalyticsRepository.PayStatsRow> byCountry = analyticsRepository.payStatsByCountry(0, List.of(""), null);
+        assertThat(byCountry).extracting(AnalyticsRepository.PayStatsRow::getLabel).containsExactly("India", "US");
+        AnalyticsRepository.PayStatsRow us = byCountry.get(1);
+        assertThat(us.getHeadcount()).isEqualTo(3);
+        assertThat(us.getMinUsd()).isEqualByComparingTo("60000");
+        assertThat(us.getMaxUsd()).isEqualByComparingTo("140000");
+        assertThat(us.getAvgUsd()).isEqualByComparingTo("100000");
+        assertThat(us.getMedianUsd()).isEqualByComparingTo("100000");
+        AnalyticsRepository.PayStatsRow india = byCountry.get(0);
+        assertThat(india.getMedianUsd()).isEqualByComparingTo("75000");   // even count: middle two averaged
+
+        // restricted to one country, grouped by department
+        List<AnalyticsRepository.PayStatsRow> byDept = analyticsRepository.payStatsByDepartment(1, List.of("India"), null);
+        assertThat(byDept).hasSize(1);
+        assertThat(byDept.getFirst().getLabel()).isEqualTo("Sales");
+        assertThat(byDept.getFirst().getMaxUsd()).isEqualByComparingTo("100000");
+    }
+
     private void currency(String code, String rate) {
         CurrencyRate c = new CurrencyRate();
         c.setCode(code);

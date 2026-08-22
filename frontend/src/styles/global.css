@@ -1875,3 +1875,212 @@ a:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- pay statistics range plot + country chips ---------- */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 12.5px;
+  cursor: pointer;
+  background: var(--surface);
+  user-select: none;
+}
+
+.chip input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.chip.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.range-plot {
+  margin-top: 6px;
+}
+
+.range-row {
+  display: grid;
+  grid-template-columns: 170px 1fr 280px;
+  gap: 16px;
+  align-items: center;
+  padding: 12px 8px;
+  margin: 0 -8px;
+  border-bottom: 1px solid var(--line);
+  border-radius: 8px;
+  position: relative;
+}
+
+/* instant tooltip (no native-title delay), readable size, above the row */
+.range-row[data-tip]:hover {
+  background: var(--accent-soft);
+}
+
+.range-row[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% - 2px);
+  transform: translateX(-50%) translateY(4px);
+  background: #0f172a;
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.08s ease, transform 0.08s ease;
+  z-index: 5;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.25);
+}
+
+.range-row[data-tip]:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.range-row:last-child {
+  border-bottom: 0;
+}
+
+.range-row.range-head {
+  padding: 0 0 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.range-label {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.range-axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--mono);
+}
+
+.range-track {
+  position: relative;
+  height: 18px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.range-span {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  background: var(--accent-soft);
+  border: 1px solid #bfdbfe; /* blue-200 */
+  border-radius: 999px;
+}
+
+.range-marker {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  transform: translate(-50%, -50%);
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.15);
+}
+
+.range-marker.median {
+  background: var(--success-fill);
+  border-radius: 50%;
+}
+
+.range-marker.avg {
+  background: var(--accent);
+  transform: translate(-50%, -50%) rotate(45deg);
+  border-radius: 2px;
+}
+
+.range-nums {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.range-nums.head {
+  font-family: inherit;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.range-nums .median-text {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.range-nums .avg-text {
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+.range-legend,
+.range-legend-span {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.range-legend {
+  width: 9px;
+  height: 9px;
+}
+
+.range-legend.median {
+  background: var(--success-fill);
+  border-radius: 50%;
+}
+
+.range-legend.avg {
+  background: var(--accent);
+  transform: rotate(45deg);
+  border-radius: 2px;
+}
+
+.range-legend-span {
+  width: 22px;
+  height: 9px;
+  background: var(--accent-soft);
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+}
+
+@media (max-width: 900px) {
+  .range-row {
+    grid-template-columns: 110px 1fr;
+  }
+  .range-nums,
+  .range-nums.head {
+    display: none;
+  }
+}

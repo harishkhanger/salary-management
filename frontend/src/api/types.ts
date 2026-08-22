@@ -183,6 +183,15 @@ export interface DepartmentStats {
   medianAnnualUsd: number
 }
 
+export interface PayStats {
+  label: string
+  headcount: number
+  minUsd: number
+  maxUsd: number
+  avgUsd: number
+  medianUsd: number
+}
+
 export interface SalaryDistribution {
   bucketUsd: number
   minUsd: number | null

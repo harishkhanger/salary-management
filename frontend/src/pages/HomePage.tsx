@@ -169,13 +169,13 @@ export default function HomePage() {
           </div>
         </div>
         <nav className="quick-actions">
-          <Link to="/analytics" className="btn">
+          <Link to="/analytics" className="btn btn-primary">
             Analytics
           </Link>
-          <Link to="/employees" className="btn">
+          <Link to="/employees" className="btn btn-primary">
             Employee directory
           </Link>
-          <Link to="/employees/new" className="btn">
+          <Link to="/employees/new" className="btn btn-primary">
             Add employee
           </Link>
         </nav>

@@ -28,6 +28,11 @@ public final class AnalyticsResponses {
                                   BigDecimal avgAnnualUsd, BigDecimal medianAnnualUsd) {
     }
 
+    /** Pay statistics for one group (a country or a department), annual USD. */
+    public record PayStats(String label, long headcount, BigDecimal minUsd, BigDecimal maxUsd,
+                           BigDecimal avgUsd, BigDecimal medianUsd) {
+    }
+
     public record SalaryBucket(BigDecimal bucketFloorUsd, BigDecimal bucketCeilingUsd, long count) {
     }
 

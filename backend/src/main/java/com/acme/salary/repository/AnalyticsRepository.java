@@ -46,6 +46,21 @@ public interface AnalyticsRepository extends Repository<Employee, Long> {
         BigDecimal getMedianAnnualUsd();
     }
 
+    /** Pay statistics for one group: the four numbers an HR manager asks for. */
+    interface PayStatsRow {
+        String getLabel();
+
+        long getHeadcount();
+
+        BigDecimal getMinUsd();
+
+        BigDecimal getMaxUsd();
+
+        BigDecimal getAvgUsd();
+
+        BigDecimal getMedianUsd();
+    }
+
     interface BucketRow {
         BigDecimal getBucketFloorUsd();
 
@@ -113,6 +128,62 @@ public interface AnalyticsRepository extends Repository<Employee, Long> {
             GROUP BY t.department
             """)
     List<DepartmentMedianRow> medianByDepartment(@Param("country") String country, @Param("department") String department);
+
+    /**
+     * Min / max / average / median annual USD per country (or per department),
+     * optionally restricted to a set of countries and one department. The
+     * median is the same portable window form as medianByDepartment; the
+     * country filter is a flag + list because SQL has no "empty IN list".
+     */
+    @Query(nativeQuery = true, value = """
+            SELECT t.grp                                         AS label,
+                   COUNT(*)                                      AS headcount,
+                   ROUND(MIN(t.usd), 2)                          AS minUsd,
+                   ROUND(MAX(t.usd), 2)                          AS maxUsd,
+                   ROUND(AVG(t.usd), 2)                          AS avgUsd,
+                   ROUND(AVG(CASE WHEN t.rn IN (FLOOR((t.cnt + 1) / 2.0), CEILING((t.cnt + 1) / 2.0))
+                                  THEN t.usd END), 2)            AS medianUsd
+            FROM (SELECT e.country AS grp,
+                         e.annual_salary / c.usd_rate AS usd,
+                         ROW_NUMBER() OVER (PARTITION BY e.country
+                                            ORDER BY e.annual_salary / c.usd_rate, e.id) AS rn,
+                         COUNT(*) OVER (PARTITION BY e.country) AS cnt
+                  FROM employees e
+                  JOIN currency_rates c ON c.code = e.currency_code
+                  WHERE e.deleted = false
+                    AND (:filterCountries = 0 OR e.country IN (:countries))
+                    AND (:department IS NULL OR e.department = :department)) t
+            GROUP BY t.grp
+            ORDER BY t.grp
+            """)
+    List<PayStatsRow> payStatsByCountry(@Param("filterCountries") int filterCountries,
+                                        @Param("countries") List<String> countries,
+                                        @Param("department") String department);
+
+    @Query(nativeQuery = true, value = """
+            SELECT t.grp                                         AS label,
+                   COUNT(*)                                      AS headcount,
+                   ROUND(MIN(t.usd), 2)                          AS minUsd,
+                   ROUND(MAX(t.usd), 2)                          AS maxUsd,
+                   ROUND(AVG(t.usd), 2)                          AS avgUsd,
+                   ROUND(AVG(CASE WHEN t.rn IN (FLOOR((t.cnt + 1) / 2.0), CEILING((t.cnt + 1) / 2.0))
+                                  THEN t.usd END), 2)            AS medianUsd
+            FROM (SELECT e.department AS grp,
+                         e.annual_salary / c.usd_rate AS usd,
+                         ROW_NUMBER() OVER (PARTITION BY e.department
+                                            ORDER BY e.annual_salary / c.usd_rate, e.id) AS rn,
+                         COUNT(*) OVER (PARTITION BY e.department) AS cnt
+                  FROM employees e
+                  JOIN currency_rates c ON c.code = e.currency_code
+                  WHERE e.deleted = false
+                    AND (:filterCountries = 0 OR e.country IN (:countries))
+                    AND (:department IS NULL OR e.department = :department)) t
+            GROUP BY t.grp
+            ORDER BY t.grp
+            """)
+    List<PayStatsRow> payStatsByDepartment(@Param("filterCountries") int filterCountries,
+                                           @Param("countries") List<String> countries,
+                                           @Param("department") String department);
 
     @Query(nativeQuery = true, value = """
             SELECT FLOOR(e.annual_salary / c.usd_rate / :bucketUsd) * :bucketUsd AS bucketFloorUsd,

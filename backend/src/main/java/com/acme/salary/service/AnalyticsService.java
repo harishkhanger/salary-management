@@ -3,6 +3,7 @@ package com.acme.salary.service;
 import com.acme.salary.config.AnalyticsProperties;
 import com.acme.salary.dto.response.AnalyticsResponses.CountrySpend;
 import com.acme.salary.dto.response.AnalyticsResponses.DepartmentStats;
+import com.acme.salary.dto.response.AnalyticsResponses.PayStats;
 import com.acme.salary.dto.response.AnalyticsResponses.Distribution;
 import com.acme.salary.dto.response.AnalyticsResponses.SalaryBucket;
 import com.acme.salary.dto.response.AnalyticsResponses.Summary;
@@ -64,6 +65,29 @@ public class AnalyticsService {
                 .averageByDepartment(blankToNull(country), blankToNull(department)).stream()
                 .map(row -> new DepartmentStats(row.getDepartment(), row.getHeadcount(),
                         row.getAvgAnnualUsd(), medians.get(row.getDepartment())))
+                .toList();
+    }
+
+    /**
+     * "What do people earn in India vs Germany?" — min/max/avg/median per
+     * country or per department, for any set of countries and an optional
+     * department. Aggregated in the database like everything else here.
+     */
+    @Transactional(readOnly = true)
+    public List<PayStats> payStats(String groupBy, List<String> countries, String department) {
+        List<String> wanted = countries == null ? List.of()
+                : countries.stream().map(String::trim).filter(s -> !s.isEmpty()).toList();
+        int filter = wanted.isEmpty() ? 0 : 1;
+        // an IN list must not be empty even when the flag disables it
+        List<String> inList = wanted.isEmpty() ? List.of("") : wanted;
+        List<AnalyticsRepository.PayStatsRow> rows = switch (groupBy == null ? "country" : groupBy) {
+            case "country" -> analyticsRepository.payStatsByCountry(filter, inList, blankToNull(department));
+            case "department" -> analyticsRepository.payStatsByDepartment(filter, inList, blankToNull(department));
+            default -> throw new ValidationException("groupBy must be 'country' or 'department'");
+        };
+        return rows.stream()
+                .map(r -> new PayStats(r.getLabel(), r.getHeadcount(), r.getMinUsd(), r.getMaxUsd(),
+                        r.getAvgUsd(), r.getMedianUsd()))
                 .toList();
     }
 
