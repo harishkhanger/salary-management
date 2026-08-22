@@ -140,7 +140,7 @@ class PayrollServiceTest {
     void processRunSkipsHeldAndAlreadyCreditedThenProcessesRest() {
         stubRunSave();
         PayrollRun run = queuedRun(2026, 7, null);
-        when(employeeRepository.findCohortIds(null, null)).thenReturn(List.of(1L, 2L, 3L, 4L));
+        when(employeeRepository.findPayrollCohortIds(any())).thenReturn(List.of(1L, 2L, 3L, 4L));
         when(employeeRepository.findHeldEmployeeIds()).thenReturn(List.of(2L));
         when(salaryCreditRepository.findEmployeeIdsCreditedForPeriod(2026, 7)).thenReturn(List.of(3L));
         when(itemProcessor.credit(anyLong(), eq(2026), eq(7), eq(11L)))
@@ -167,14 +167,14 @@ class PayrollServiceTest {
         service().processRun(run);
 
         assertThat(run.getProcessedCount()).isEqualTo(1);
-        verify(employeeRepository, never()).findCohortIds(any(), any());
+        verify(employeeRepository, never()).findPayrollCohortIds(any());
     }
 
     @Test
     void oneFailingCreditDoesNotBlockTheRun() {
         stubRunSave();
         PayrollRun run = queuedRun(2026, 7, null);
-        when(employeeRepository.findCohortIds(null, null)).thenReturn(List.of(1L, 2L, 3L));
+        when(employeeRepository.findPayrollCohortIds(any())).thenReturn(List.of(1L, 2L, 3L));
         when(employeeRepository.findHeldEmployeeIds()).thenReturn(List.of());
         when(salaryCreditRepository.findEmployeeIdsCreditedForPeriod(2026, 7)).thenReturn(List.of());
         when(itemProcessor.credit(eq(1L), anyInt(), anyInt(), anyLong())).thenReturn(new SalaryCredit());
@@ -200,11 +200,11 @@ class PayrollServiceTest {
         when(payrollRunRepository.findByStatusInAndEmployeeIdIsNull(any())).thenReturn(List.of(
                 PayrollRun.builder().id(77L).year(2026).month(4).status(JobStatus.RUNNING).build()));
         when(employeeRepository.countByDeletedFalseAndStatus(EmployeeStatus.ON_HOLD)).thenReturn(4L);
-        when(employeeRepository.countActiveUnpaidForPeriod(2026, 8)).thenReturn(9_700L);
-        when(employeeRepository.countActiveUnpaidForPeriod(2026, 7)).thenReturn(0L);
-        when(employeeRepository.countActiveUnpaidForPeriod(2026, 6)).thenReturn(12L);
-        when(employeeRepository.countActiveUnpaidForPeriod(2026, 5)).thenReturn(9_700L);
-        when(employeeRepository.countActiveUnpaidForPeriod(2026, 4)).thenReturn(500L);
+        when(employeeRepository.countActiveUnpaidForPeriod(eq(2026), eq(8), any())).thenReturn(9_700L);
+        when(employeeRepository.countActiveUnpaidForPeriod(eq(2026), eq(7), any())).thenReturn(0L);
+        when(employeeRepository.countActiveUnpaidForPeriod(eq(2026), eq(6), any())).thenReturn(12L);
+        when(employeeRepository.countActiveUnpaidForPeriod(eq(2026), eq(5), any())).thenReturn(9_700L);
+        when(employeeRepository.countActiveUnpaidForPeriod(eq(2026), eq(4), any())).thenReturn(500L);
 
         List<PayrollMonthResponse> rows = service().months(5);
 
@@ -225,7 +225,7 @@ class PayrollServiceTest {
     void monthsWindowIsClampedToTheConfiguredMaximum() {
         when(salaryCreditRepository.aggregateByPeriodSince(anyInt())).thenReturn(List.of());
         when(payrollRunRepository.findByStatusInAndEmployeeIdIsNull(any())).thenReturn(List.of());
-        when(employeeRepository.countActiveUnpaidForPeriod(anyInt(), anyInt())).thenReturn(0L);
+        when(employeeRepository.countActiveUnpaidForPeriod(anyInt(), anyInt(), any())).thenReturn(0L);
 
         assertThat(service().months(500)).hasSize(24);
         assertThat(service().months(0)).hasSize(1);

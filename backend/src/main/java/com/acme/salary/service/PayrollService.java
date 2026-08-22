@@ -94,9 +94,12 @@ public class PayrollService {
         run.setStatus(JobStatus.RUNNING);
         payrollRunRepository.save(run);
 
+        // org-wide: everyone who had joined by the end of the period (a July
+        // joiner is not owed March); single-employee runs are explicit
         List<Long> cohortIds = run.getEmployeeId() != null
                 ? List.of(run.getEmployeeId())
-                : employeeRepository.findCohortIds(null, null);
+                : employeeRepository.findPayrollCohortIds(
+                        YearMonth.of(run.getYear(), run.getMonth()).atEndOfMonth());
         Set<Long> held = new HashSet<>(employeeRepository.findHeldEmployeeIds());
         Set<Long> alreadyCredited = new HashSet<>(
                 salaryCreditRepository.findEmployeeIdsCreditedForPeriod(run.getYear(), run.getMonth()));
@@ -163,7 +166,8 @@ public class PayrollService {
         for (YearMonth ym = current; !ym.isBefore(oldest); ym = ym.minusMonths(1)) {
             MonthCreditAggregate agg = credited.get(ym);
             long creditedCount = agg == null ? 0 : agg.creditedCount();
-            long unpaid = employeeRepository.countActiveUnpaidForPeriod(ym.getYear(), ym.getMonthValue());
+            long unpaid = employeeRepository.countActiveUnpaidForPeriod(
+                    ym.getYear(), ym.getMonthValue(), ym.atEndOfMonth());
             PayrollRun run = inFlight.get(ym);
             LocalDate opensOn = ym.atDay(payrollProperties.currentMonthProcessableFromDay());
             boolean opensLater = ym.equals(current) && today.isBefore(opensOn);

@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -50,17 +51,30 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, JpaSp
     long countByDeletedFalseAndStatus(EmployeeStatus status);
 
     /**
-     * Payroll screen: ACTIVE employees with no credit for the period — exactly
-     * the set a "Pay" for that month would credit (held employees are skipped,
-     * so they are not counted as unpaid).
+     * Payroll cohort for a period: everyone not deleted who had joined by the
+     * end of that month. Someone who joined in July is not owed March —
+     * without this rule every past month would look "partially paid" forever.
+     */
+    @Query("""
+            SELECT e.id FROM Employee e
+            WHERE e.deleted = false AND e.joinedOn <= :periodEnd
+            """)
+    List<Long> findPayrollCohortIds(@Param("periodEnd") LocalDate periodEnd);
+
+    /**
+     * Payroll screen: ACTIVE employees who had joined by the period's end and
+     * have no credit for it — exactly the set a "Pay" for that month would
+     * credit (held employees are skipped, so they are not counted as unpaid).
      */
     @Query("""
             SELECT COUNT(e.id) FROM Employee e
             WHERE e.deleted = false
               AND e.status = com.acme.salary.enums.EmployeeStatus.ACTIVE
+              AND e.joinedOn <= :periodEnd
               AND NOT EXISTS (
                   SELECT 1 FROM SalaryCredit c
                   WHERE c.employeeId = e.id AND c.year = :year AND c.month = :month)
             """)
-    long countActiveUnpaidForPeriod(@Param("year") int year, @Param("month") int month);
+    long countActiveUnpaidForPeriod(@Param("year") int year, @Param("month") int month,
+                                    @Param("periodEnd") LocalDate periodEnd);
 }

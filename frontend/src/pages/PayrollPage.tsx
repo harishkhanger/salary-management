@@ -28,7 +28,7 @@ export function payrollSentence(m: PayrollMonth): string {
       return `${m.creditedCount.toLocaleString()} paid${m.lastPaidAt ? ` on ${formatDate(m.lastPaidAt)}` : ''} · ${plural(
         m.unpaidCount,
         'employee',
-      )} still unpaid (joined since, or hold released)`
+      )} still unpaid (joined after the run, or hold released)`
     case 'DUE':
       return `Not paid yet · ${plural(m.unpaidCount, 'employee')} to pay${
         m.heldCount > 0 ? ` (${m.heldCount} on hold will be skipped)` : ''
@@ -192,7 +192,7 @@ export default function PayrollPage() {
                 </span>
                 <span>
                   {action && !running && (
-                    <button className="btn btn-primary btn-sm" onClick={() => setConfirm(m)}>
+                    <button className="btn btn-primary btn-sm month-action" onClick={() => setConfirm(m)}>
                       {action}
                     </button>
                   )}
