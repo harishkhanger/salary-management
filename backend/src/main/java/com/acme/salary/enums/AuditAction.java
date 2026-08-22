@@ -16,5 +16,6 @@ public enum AuditAction {
     RUN_COMPLETED,
     // settings surface
     RATE_UPDATED,
-    THRESHOLD_UPDATED
+    THRESHOLD_UPDATED,
+    PAYROLL_DAY_UPDATED
 }

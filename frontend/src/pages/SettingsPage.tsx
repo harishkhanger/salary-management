@@ -12,13 +12,22 @@ export default function SettingsPage() {
   const [threshold, setThreshold] = useState('')
   const [savingThreshold, setSavingThreshold] = useState(false)
 
+  // --- payroll day ---
+  const [payrollDay, setPayrollDay] = useState('')
+  const [savedPayrollDay, setSavedPayrollDay] = useState<number | null>(null)
+  const [savingPayrollDay, setSavingPayrollDay] = useState(false)
+
   // --- currency rates ---
   const [currencies, setCurrencies] = useState<CurrencyRate[]>([])
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   const [savingCode, setSavingCode] = useState<string | null>(null)
 
   const load = useCallback(() => {
-    get<Settings>('/settings').then((s) => setThreshold(String(s.raiseThresholdPercent)))
+    get<Settings>('/settings').then((s) => {
+      setThreshold(String(s.raiseThresholdPercent))
+      setPayrollDay(String(s.payrollDay))
+      setSavedPayrollDay(s.payrollDay)
+    })
     get<CurrencyRate[]>('/currencies').then((list) => {
       setCurrencies(list)
       setDrafts(Object.fromEntries(list.map((c) => [c.code, String(c.usdRate)])))
@@ -37,6 +46,23 @@ export default function SettingsPage() {
       toast.error(humanize(e, 'Could not save'))
     } finally {
       setSavingThreshold(false)
+    }
+  }
+
+  const ordinal = (n: number) => `${n}${[, 'st', 'nd', 'rd'][(n % 100 >> 3) ^ 1 && n % 10] || 'th'}`
+  const payrollDayValid = payrollDay !== '' && Number(payrollDay) >= 1 && Number(payrollDay) <= 28 && Number.isInteger(Number(payrollDay))
+
+  const savePayrollDay = async () => {
+    setSavingPayrollDay(true)
+    try {
+      const saved = await put<Settings>('/settings', { payrollDay: Number(payrollDay) })
+      setPayrollDay(String(saved.payrollDay))
+      setSavedPayrollDay(saved.payrollDay)
+      toast.success(`Payroll now opens on the ${ordinal(saved.payrollDay)} of each month`)
+    } catch (e) {
+      toast.error(humanize(e, 'Could not save'))
+    } finally {
+      setSavingPayrollDay(false)
     }
   }
 
@@ -59,8 +85,41 @@ export default function SettingsPage() {
       <div className="page-header">
         <div>
           <h2 className="page-title">Settings</h2>
-          <div className="page-subtitle">Guardrail threshold and manually managed currency rates</div>
+          <div className="page-subtitle">Payroll day, raise guardrail, and manually managed currency rates</div>
         </div>
+      </div>
+
+      <div className="card" style={{ maxWidth: 560 }}>
+        <h3 style={{ marginBottom: 6 }}>Payroll day</h3>
+        <p className="muted" style={{ marginTop: 0 }}>
+          The current month can be paid from this day onwards (earlier months can always be paid). Capped at 28 so
+          the rule holds in February.
+        </p>
+        <div className="toolbar">
+          <Field label="Day of the month">
+            <input
+              className="input"
+              style={{ width: 120 }}
+              type="number"
+              min="1"
+              max="28"
+              step="1"
+              value={payrollDay}
+              onChange={(e) => setPayrollDay(e.target.value)}
+            />
+          </Field>
+          <div className="field">
+            <span className="field-label">&nbsp;</span>
+            <button
+              className="btn btn-primary"
+              onClick={savePayrollDay}
+              disabled={savingPayrollDay || !payrollDayValid || Number(payrollDay) === savedPayrollDay}
+            >
+              {savingPayrollDay ? 'Saving…' : 'Save payroll day'}
+            </button>
+          </div>
+        </div>
+        {payrollDay !== '' && !payrollDayValid && <span className="field-error">Enter a whole number from 1 to 28</span>}
       </div>
 
       <div className="card" style={{ maxWidth: 560 }}>

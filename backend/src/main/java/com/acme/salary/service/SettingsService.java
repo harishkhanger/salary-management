@@ -70,20 +70,36 @@ public class SettingsService {
         return SettingsResponse.from(settingsRow());
     }
 
+    /** Partial update; each changed setting gets its own audit row. */
     @Transactional
     public SettingsResponse updateSettings(SettingsUpdateRequest request) {
+        if (request.raiseThresholdPercent() == null && request.payrollDay() == null) {
+            throw new com.acme.salary.exception.ValidationException("Nothing to update — send a threshold or a payroll day");
+        }
         OrgSettings settings = settingsRow();
-        java.math.BigDecimal oldThreshold = settings.getRaiseThresholdPercent();
-        settings.setRaiseThresholdPercent(request.raiseThresholdPercent());
-        SettingsResponse response = SettingsResponse.from(orgSettingsRepository.save(settings));
-        eventPublisher.publishEvent(AuditEvent.builder()
-                .entityType(AuditEntityType.SETTINGS).entityId(SETTINGS_ROW_ID)
-                .action(AuditAction.THRESHOLD_UPDATED).actor(currentActor())
-                .changedFields(java.util.Map.of("raiseThresholdPercent",
-                        java.util.Map.of("old", oldThreshold.toPlainString(),
-                                "new", request.raiseThresholdPercent().toPlainString())))
-                .build());
-        return response;
+        if (request.raiseThresholdPercent() != null) {
+            java.math.BigDecimal oldThreshold = settings.getRaiseThresholdPercent();
+            settings.setRaiseThresholdPercent(request.raiseThresholdPercent());
+            eventPublisher.publishEvent(AuditEvent.builder()
+                    .entityType(AuditEntityType.SETTINGS).entityId(SETTINGS_ROW_ID)
+                    .action(AuditAction.THRESHOLD_UPDATED).actor(currentActor())
+                    .changedFields(java.util.Map.of("raiseThresholdPercent",
+                            java.util.Map.of("old", oldThreshold.toPlainString(),
+                                    "new", request.raiseThresholdPercent().toPlainString())))
+                    .build());
+        }
+        if (request.payrollDay() != null) {
+            int oldDay = settings.getPayrollDay();
+            settings.setPayrollDay(request.payrollDay());
+            eventPublisher.publishEvent(AuditEvent.builder()
+                    .entityType(AuditEntityType.SETTINGS).entityId(SETTINGS_ROW_ID)
+                    .action(AuditAction.PAYROLL_DAY_UPDATED).actor(currentActor())
+                    .changedFields(java.util.Map.of("payrollDay",
+                            java.util.Map.of("old", String.valueOf(oldDay),
+                                    "new", String.valueOf(request.payrollDay()))))
+                    .build());
+        }
+        return SettingsResponse.from(orgSettingsRepository.save(settings));
     }
 
     private String currentActor() {

@@ -150,6 +150,8 @@ export interface CurrencyRate {
 
 export interface Settings {
   raiseThresholdPercent: number
+  /** Day of the month (1–28) from which the current month's payroll can be paid. */
+  payrollDay: number
 }
 
 export interface SessionUser {

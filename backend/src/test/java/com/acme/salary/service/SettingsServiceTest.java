@@ -83,7 +83,22 @@ class SettingsServiceTest {
 
         assertThat(service().getSettings().raiseThresholdPercent()).isEqualByComparingTo("30.00");
 
-        var updated = service().updateSettings(new SettingsUpdateRequest(new BigDecimal("25.00")));
+        var updated = service().updateSettings(new SettingsUpdateRequest(new BigDecimal("25.00"), null));
         assertThat(updated.raiseThresholdPercent()).isEqualByComparingTo("25.00");
+    }
+
+    @Test
+    void updatePayrollDayOnlyLeavesThresholdUntouched() {
+        OrgSettings row = new OrgSettings();
+        row.setId(1L);
+        row.setRaiseThresholdPercent(new BigDecimal("30.00"));
+        row.setPayrollDay(25);
+        when(orgSettingsRepository.findById(1L)).thenReturn(java.util.Optional.of(row));
+        when(orgSettingsRepository.save(any(OrgSettings.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var updated = service().updateSettings(new SettingsUpdateRequest(null, 20));
+
+        assertThat(updated.payrollDay()).isEqualTo(20);
+        assertThat(updated.raiseThresholdPercent()).isEqualByComparingTo("30.00");
     }
 }

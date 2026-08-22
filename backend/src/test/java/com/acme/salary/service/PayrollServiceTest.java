@@ -2,7 +2,8 @@ package com.acme.salary.service;
 
 import com.acme.salary.config.PaginationProperties;
 import com.acme.salary.config.JobProperties;
-import com.acme.salary.config.PayrollProperties;
+import com.acme.salary.entities.OrgSettings;
+import com.acme.salary.repository.OrgSettingsRepository;
 import com.acme.salary.dto.request.PayrollRunRequest;
 import com.acme.salary.dto.MonthCreditAggregate;
 import com.acme.salary.dto.response.PayrollMonthResponse;
@@ -58,12 +59,23 @@ class PayrollServiceTest {
     private PayrollItemProcessor itemProcessor;
 
     @Mock
+    private OrgSettingsRepository orgSettingsRepository;
+
+    @Mock
     private org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     private PayrollService service() {
+        return service(FIXED);
+    }
+
+    /** Org settings say the current month opens on the 25th (lenient: not every test reads it). */
+    private PayrollService service(Clock clock) {
+        OrgSettings settings = org.mockito.Mockito.mock(OrgSettings.class);
+        org.mockito.Mockito.lenient().when(settings.getPayrollDay()).thenReturn(25);
+        org.mockito.Mockito.lenient().when(orgSettingsRepository.findById(1L)).thenReturn(Optional.of(settings));
         return new PayrollService(employeeRepository, salaryCreditRepository,
-                payrollRunRepository, itemProcessor, new PayrollProperties(25),
-                new JobProperties(100), new PaginationProperties(100), eventPublisher, FIXED);
+                payrollRunRepository, itemProcessor, orgSettingsRepository,
+                new JobProperties(100), new PaginationProperties(100), eventPublisher, clock);
     }
 
     private void stubRunSave() {
@@ -104,9 +116,7 @@ class PayrollServiceTest {
     @Test
     void queueAllowsCurrentMonthOnOrAfterDay25() {
         Clock day25 = Clock.fixed(Instant.parse("2026-08-25T00:00:00Z"), ZoneOffset.UTC);
-        PayrollService service = new PayrollService(employeeRepository, salaryCreditRepository,
-                payrollRunRepository, itemProcessor, new PayrollProperties(25),
-                new JobProperties(100), new PaginationProperties(100), eventPublisher, day25);
+        PayrollService service = service(day25);
         stubRunSave();
 
         PayrollRunResponse response = service.queue(new PayrollRunRequest(2026, 8, null), "hr");

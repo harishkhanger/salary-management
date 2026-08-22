@@ -23,4 +23,8 @@ public class OrgSettings {
 
     @Column(name = "raise_threshold_percent", nullable = false, precision = 5, scale = 2)
     private BigDecimal raiseThresholdPercent;
+
+    /** Day of the month from which the current month's payroll may be processed (1–28). */
+    @Column(name = "payroll_day", nullable = false)
+    private int payrollDay;
 }

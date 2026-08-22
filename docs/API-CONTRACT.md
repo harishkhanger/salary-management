@@ -116,8 +116,8 @@ usdRate, payrollRunId, createdAt}` — immutable snapshot; `usdRate` is the rate
 credit time. Durable job like bulk raises; idempotency is check-then-insert with
 the DB unique key as referee — re-runs count `alreadyProcessedCount`, never
 double-pay; crash resume derives from the credits themselves. Held employees are
-skipped and counted. Month rule: past months always; current month only from day
-25 (configurable); future months rejected (VALIDATION).
+skipped and counted. Month rule: past months always; current month only from the
+org-settings payroll day (default 25, editable on the Settings page); future months rejected (VALIDATION).
 
 ## 7. Currencies & settings ✅
 
@@ -125,8 +125,8 @@ skipped and counted. Month rule: past months always; current month only from day
 |---|---|---|
 | ✅ `GET /api/currencies` | – | `[{code, name, usdRate, updatedAt}]` |
 | ✅ `PUT /api/currencies/{code}` | `{usdRate}` | `Currency` (affects future credits/analytics only) |
-| ✅ `GET /api/settings` | – | `{raiseThresholdPercent}` |
-| ✅ `PUT /api/settings` | `{raiseThresholdPercent}` | `Settings` |
+| ✅ `GET /api/settings` | – | `{raiseThresholdPercent, payrollDay}` |
+| ✅ `PUT /api/settings` | `{raiseThresholdPercent?, payrollDay? (1–28)}` — partial: omitted fields keep their value; each changed field gets its own audit row (THRESHOLD_UPDATED / PAYROLL_DAY_UPDATED) | `Settings` |
 
 ## 8. Audit feed ✅
 
@@ -146,7 +146,8 @@ Item = `{kind: ENTRY|RUN, id, entityType, entityId, action, actor, changedFields
 refTable?, refId?, runId?, runSummary?, createdAt}` — money events are thin
 references; amounts live in the referenced rows. Actions: CREATED, PROFILE_UPDATED,
 STATUS_CHANGED, DELETED, SALARY_CHANGED, RAISE_PARKED, RAISE_APPROVED,
-RAISE_REJECTED, SALARY_CREDITED, RUN_COMPLETED, RATE_UPDATED, THRESHOLD_UPDATED.
+RAISE_REJECTED, SALARY_CREDITED, RUN_COMPLETED, RATE_UPDATED, THRESHOLD_UPDATED,
+PAYROLL_DAY_UPDATED.
 Currencies have no numeric id: entityId 0, code inside changed_fields.
 Feed filters (global view): `action` and `entityType` (alone — validated against
 the enums, else 400 VALIDATION), `actor` (exact match), `from`/`to` (ISO dates,

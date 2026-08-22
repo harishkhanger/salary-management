@@ -24,5 +24,4 @@ app:
   analytics:
     distribution-bucket-usd: 50000
   payroll:
-    current-month-processable-from-day: 25
     poll-interval-ms: 2000

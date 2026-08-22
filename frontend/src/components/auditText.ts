@@ -24,6 +24,7 @@ export function actionLabel(action: string): string {
     RUN_COMPLETED: 'Completed',
     RATE_UPDATED: 'Rate updated',
     THRESHOLD_UPDATED: 'Guardrail changed',
+    PAYROLL_DAY_UPDATED: 'Payroll day changed',
   }
   return labels[action] ?? action.replaceAll('_', ' ').toLowerCase()
 }
@@ -81,6 +82,8 @@ export function auditSentence(item: AuditFeedItem): string {
       return `${who} paid`
     case 'RATE_UPDATED':
       return `Exchange rate for ${String(f.code ?? '')} changed${isChange(f.usdRate) ? ` ${f.usdRate.old} → ${f.usdRate.new}` : ''}`
+    case 'PAYROLL_DAY_UPDATED':
+      return `Payroll day changed${isChange(f.payrollDay) ? ` ${f.payrollDay.old} → ${f.payrollDay.new}` : ''}`
     case 'THRESHOLD_UPDATED':
       return `Raise guardrail changed${isChange(f.raiseThresholdPercent) ? ` ${f.raiseThresholdPercent.old}% → ${f.raiseThresholdPercent.new}%` : ''}`
     default:

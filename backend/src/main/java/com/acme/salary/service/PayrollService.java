@@ -2,7 +2,6 @@ package com.acme.salary.service;
 
 import com.acme.salary.config.PaginationProperties;
 import com.acme.salary.config.JobProperties;
-import com.acme.salary.config.PayrollProperties;
 import com.acme.salary.dto.response.PageResponse;
 import com.acme.salary.dto.request.PayrollRunRequest;
 import com.acme.salary.dto.MonthCreditAggregate;
@@ -19,6 +18,7 @@ import com.acme.salary.events.AuditEvent;
 import com.acme.salary.exception.NotFoundException;
 import com.acme.salary.exception.ValidationException;
 import com.acme.salary.repository.EmployeeRepository;
+import com.acme.salary.repository.OrgSettingsRepository;
 import com.acme.salary.repository.PayrollRunRepository;
 import com.acme.salary.repository.SalaryCreditRepository;
 import lombok.RequiredArgsConstructor;
@@ -60,7 +60,7 @@ public class PayrollService {
     private final SalaryCreditRepository salaryCreditRepository;
     private final PayrollRunRepository payrollRunRepository;
     private final PayrollItemProcessor itemProcessor;
-    private final PayrollProperties payrollProperties;
+    private final OrgSettingsRepository orgSettingsRepository;
     private final JobProperties jobProperties;
     private final PaginationProperties paginationProperties;
     private final ApplicationEventPublisher eventPublisher;
@@ -161,6 +161,7 @@ public class PayrollService {
                 .collect(Collectors.toMap(r -> YearMonth.of(r.getYear(), r.getMonth()),
                         Function.identity(), (a, b) -> a));
         long held = employeeRepository.countByDeletedFalseAndStatus(EmployeeStatus.ON_HOLD);
+        int payrollDay = payrollDay();
 
         List<PayrollMonthResponse> rows = new ArrayList<>();
         for (YearMonth ym = current; !ym.isBefore(oldest); ym = ym.minusMonths(1)) {
@@ -169,7 +170,7 @@ public class PayrollService {
             long unpaid = employeeRepository.countActiveUnpaidForPeriod(
                     ym.getYear(), ym.getMonthValue(), ym.atEndOfMonth());
             PayrollRun run = inFlight.get(ym);
-            LocalDate opensOn = ym.atDay(payrollProperties.currentMonthProcessableFromDay());
+            LocalDate opensOn = ym.atDay(payrollDay);
             boolean opensLater = ym.equals(current) && today.isBefore(opensOn);
 
             PayrollMonthState state;
@@ -213,9 +214,16 @@ public class PayrollService {
                 SalaryCreditResponse::from);
     }
 
+    /** The day of month from which the current month opens — an HR setting (Settings page), audited. */
+    private int payrollDay() {
+        return orgSettingsRepository.findById(1L)
+                .orElseThrow(() -> new IllegalStateException("org_settings row missing"))
+                .getPayrollDay();
+    }
+
     /**
      * Per Harish: past months are always processable; the current month only
-     * from the configured day (default the 25th); future months never.
+     * from the payroll day in org settings (default the 25th); future months never.
      */
     private void requireProcessablePeriod(int year, int month) {
         YearMonth requested = YearMonth.of(year, month);
@@ -224,10 +232,10 @@ public class PayrollService {
         if (requested.isAfter(current)) {
             throw new ValidationException("Cannot process payroll for future month " + requested);
         }
-        if (requested.equals(current)
-                && today.getDayOfMonth() < payrollProperties.currentMonthProcessableFromDay()) {
+        int payrollDay = payrollDay();
+        if (requested.equals(current) && today.getDayOfMonth() < payrollDay) {
             throw new ValidationException("Payroll for " + requested + " opens on day "
-                    + payrollProperties.currentMonthProcessableFromDay() + " of the month");
+                    + payrollDay + " of the month");
         }
     }
 
