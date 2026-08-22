@@ -67,11 +67,19 @@ public class AnalyticsService {
                 .toList();
     }
 
-    /** Band widths the dashboard may request; anything else is rejected. */
+    /** Whole-org histogram: band widths the dashboard may request; anything else is rejected. */
     private static final List<Integer> ALLOWED_BUCKETS = List.of(5_000, 10_000, 20_000, 50_000);
+    /** Custom range: any width from this down to this many bands — keeps the chart readable and the query bounded. */
+    private static final int MIN_RANGE_BUCKET_USD = 100;
+    private static final int MAX_RANGE_BANDS = 200;
+    private static final int TARGET_RANGE_BANDS = 10;
 
     @Transactional(readOnly = true)
-    public Distribution salaryDistribution(String country, String department, Integer requestedBucketUsd) {
+    public Distribution salaryDistribution(String country, String department, Integer requestedBucketUsd,
+                                           Integer minUsd, Integer maxUsd) {
+        if (minUsd != null || maxUsd != null) {
+            return rangeDistribution(country, department, requestedBucketUsd, minUsd, maxUsd);
+        }
         int bucketUsd = requestedBucketUsd != null ? requestedBucketUsd
                 : analyticsProperties.distributionBucketUsd();
         if (!ALLOWED_BUCKETS.contains(bucketUsd)) {
@@ -83,7 +91,62 @@ public class AnalyticsService {
                         row.getBucketFloorUsd().add(BigDecimal.valueOf(bucketUsd)),
                         row.getEmployeeCount()))
                 .toList();
-        return new Distribution(bucketUsd, buckets);
+        long total = buckets.stream().mapToLong(SalaryBucket::count).sum();
+        return new Distribution(bucketUsd, null, null, total, buckets);
+    }
+
+    /**
+     * "How many people earn between X and Y?" — same SQL aggregate, bands
+     * anchored at X. Width defaults to roughly ten bands, rounded to a
+     * sensible figure; empty bands are filled so the chart stays contiguous.
+     */
+    private Distribution rangeDistribution(String country, String department, Integer requestedBucketUsd,
+                                           Integer minUsd, Integer maxUsd) {
+        if (minUsd == null || maxUsd == null) {
+            throw new ValidationException("Give both a minimum and a maximum salary for the range");
+        }
+        if (minUsd < 0 || maxUsd <= minUsd) {
+            throw new ValidationException("The maximum salary must be greater than the minimum");
+        }
+        int range = maxUsd - minUsd;
+        int bucketUsd = requestedBucketUsd != null ? requestedBucketUsd : defaultRangeBucket(range);
+        if (bucketUsd < MIN_RANGE_BUCKET_USD) {
+            throw new ValidationException("Band width must be at least " + MIN_RANGE_BUCKET_USD);
+        }
+        // a band as wide as (or wider than) the range is the "one bar" question:
+        // "how many earn between X and Y?" — answer with a single band
+        bucketUsd = Math.min(bucketUsd, range);
+        if (range / bucketUsd > MAX_RANGE_BANDS) {
+            throw new ValidationException("That band width gives more than " + MAX_RANGE_BANDS
+                    + " bands — widen it or narrow the range");
+        }
+
+        Map<Integer, Long> counted = new java.util.HashMap<>();
+        for (var row : analyticsRepository.salaryDistributionInRange(bucketUsd, minUsd, maxUsd,
+                blankToNull(country), blankToNull(department))) {
+            counted.merge(row.getBucketFloorUsd().intValue(), row.getEmployeeCount(), Long::sum);
+        }
+        List<SalaryBucket> buckets = new java.util.ArrayList<>();
+        for (int floor = minUsd; floor < maxUsd; floor += bucketUsd) {
+            int ceiling = Math.min(floor + bucketUsd, maxUsd);
+            long count = counted.getOrDefault(floor, 0L);
+            if (ceiling == maxUsd) {
+                // a salary sitting exactly on the maximum is inside the range: fold it into the last band
+                count += counted.getOrDefault(maxUsd, 0L);
+            }
+            buckets.add(new SalaryBucket(BigDecimal.valueOf(floor), BigDecimal.valueOf(ceiling), count));
+        }
+        long total = buckets.stream().mapToLong(SalaryBucket::count).sum();
+        return new Distribution(bucketUsd, minUsd, maxUsd, total, buckets);
+    }
+
+    /** ~10 bands, rounded down to 1/2/5 x 10^n so labels read cleanly (2,000 not 2,137). */
+    public static int defaultRangeBucket(int range) {
+        int raw = Math.max(range / TARGET_RANGE_BANDS, MIN_RANGE_BUCKET_USD);
+        int magnitude = (int) Math.pow(10, (int) Math.log10(raw));
+        int leading = raw / magnitude;
+        int nice = leading >= 5 ? 5 : leading >= 2 ? 2 : 1;
+        return Math.max(nice * magnitude, MIN_RANGE_BUCKET_USD);
     }
 
     private String blankToNull(String value) {

@@ -41,7 +41,9 @@ public class AnalyticsController {
     @GetMapping("/salary-distribution")
     public Distribution salaryDistribution(@RequestParam(required = false) String country,
                                            @RequestParam(required = false) String department,
-                                           @RequestParam(required = false) Integer bucketUsd) {
-        return analyticsService.salaryDistribution(country, department, bucketUsd);
+                                           @RequestParam(required = false) Integer bucketUsd,
+                                           @RequestParam(required = false) Integer minUsd,
+                                           @RequestParam(required = false) Integer maxUsd) {
+        return analyticsService.salaryDistribution(country, department, bucketUsd, minUsd, maxUsd);
     }
 }

@@ -161,7 +161,7 @@ rows stay collapsed.
 | ✅ `GET /api/analytics/summary` | `?country&department` | `{totalMonthlySpendUsd, headcount, onHoldCount, lastPayrollRun:{year, month, processedCount, createdAt}}` |
 | ✅ `GET /api/analytics/by-country` | `?country&department` | `[{country, headcount, monthlySpendUsd}]` |
 | ✅ `GET /api/analytics/by-department` | `?country&department` | `[{department, headcount, avgAnnualUsd, medianAnnualUsd}]` |
-| ✅ `GET /api/analytics/salary-distribution` | `?country&department&bucketUsd` (5000\|10000\|20000\|50000, default 50000) | `{bucketUsd, buckets:[{bucketFloorUsd, bucketCeilingUsd, count}]}` (width via app.analytics.distribution-bucket-usd) |
+| ✅ `GET /api/analytics/salary-distribution` | `?country&department&bucketUsd` (5000\|10000\|20000\|50000, default 50000) — or a **custom range** `?minUsd&maxUsd[&bucketUsd]` (inclusive bounds; width free from 100 up to the range, ≤200 bands, default ≈10 nice-rounded bands) | `{bucketUsd, minUsd?, maxUsd?, total, buckets:[{bucketFloorUsd, bucketCeilingUsd, count}]}` — `total` = employees in range; custom-range bands are anchored at minUsd and contiguous (empty bands included) |
 
 All computed as SQL aggregates in the DB (never loading 10k rows), USD-normalized
 via current rates. Optional country/department filters slice every endpoint;

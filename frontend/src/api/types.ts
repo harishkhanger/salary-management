@@ -152,6 +152,7 @@ export interface AuditFeedItem {
   id: number
   entityType: string
   entityId: number
+  entityName: string | null
   action: string
   actor: string
   changedFields: Record<string, unknown> | null
@@ -184,5 +185,8 @@ export interface DepartmentStats {
 
 export interface SalaryDistribution {
   bucketUsd: number
+  minUsd: number | null
+  maxUsd: number | null
+  total: number
   buckets: { bucketFloorUsd: number; bucketCeilingUsd: number; count: number }[]
 }

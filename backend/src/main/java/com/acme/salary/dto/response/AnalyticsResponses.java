@@ -31,6 +31,12 @@ public final class AnalyticsResponses {
     public record SalaryBucket(BigDecimal bucketFloorUsd, BigDecimal bucketCeilingUsd, long count) {
     }
 
-    public record Distribution(int bucketUsd, List<SalaryBucket> buckets) {
+    /**
+     * minUsd/maxUsd are null for the whole-org histogram; when a custom range
+     * was asked for they echo it and every band inside it is present (zero
+     * counts included) so the chart is contiguous. total = employees in range.
+     */
+    public record Distribution(int bucketUsd, Integer minUsd, Integer maxUsd, long total,
+                               List<SalaryBucket> buckets) {
     }
 }

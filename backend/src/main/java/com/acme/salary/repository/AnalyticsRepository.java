@@ -128,4 +128,29 @@ public interface AnalyticsRepository extends Repository<Employee, Long> {
     List<BucketRow> salaryDistribution(@Param("bucketUsd") int bucketUsd,
                                        @Param("country") String country,
                                        @Param("department") String department);
+
+    /**
+     * Custom range ("who earns between 40k and 42k?"): bands start at minUsd
+     * rather than at 0 so a 500-wide band reads 40,000–40,500; bounds are
+     * inclusive. The service fills empty bands and folds a salary sitting
+     * exactly on maxUsd into the last band.
+     */
+    @Query(nativeQuery = true, value = """
+            SELECT FLOOR((e.annual_salary / c.usd_rate - :minUsd) / :bucketUsd) * :bucketUsd + :minUsd AS bucketFloorUsd,
+                   COUNT(*)                                                                          AS employeeCount
+            FROM employees e
+            JOIN currency_rates c ON c.code = e.currency_code
+            WHERE e.deleted = false
+              AND (:country IS NULL OR e.country = :country)
+              AND (:department IS NULL OR e.department = :department)
+              AND e.annual_salary / c.usd_rate >= :minUsd
+              AND e.annual_salary / c.usd_rate <= :maxUsd
+            GROUP BY bucketFloorUsd
+            ORDER BY bucketFloorUsd
+            """)
+    List<BucketRow> salaryDistributionInRange(@Param("bucketUsd") int bucketUsd,
+                                              @Param("minUsd") int minUsd,
+                                              @Param("maxUsd") int maxUsd,
+                                              @Param("country") String country,
+                                              @Param("department") String department);
 }

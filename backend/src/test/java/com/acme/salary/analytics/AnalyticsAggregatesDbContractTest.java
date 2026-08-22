@@ -4,6 +4,7 @@ import com.acme.salary.entities.CurrencyRate;
 import com.acme.salary.entities.Employee;
 import com.acme.salary.enums.EmployeeStatus;
 import com.acme.salary.repository.AnalyticsRepository;
+import com.acme.salary.service.AnalyticsService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +31,9 @@ class AnalyticsAggregatesDbContractTest {
 
     @Autowired
     private AnalyticsRepository analyticsRepository;
+
+    @Autowired
+    private com.acme.salary.repository.PayrollRunRepository payrollRunRepository;
 
     @BeforeEach
     void seed() {
@@ -105,6 +109,35 @@ class AnalyticsAggregatesDbContractTest {
         assertThat(rows.getFirst().getEmployeeCount()).isEqualTo(2);
         assertThat(rows.getLast().getBucketFloorUsd()).isEqualByComparingTo("100000");
         assertThat(rows.getLast().getEmployeeCount()).isEqualTo(3);
+    }
+
+    @Test
+    void rangeDistributionAnchorsBandsAtMinimumAndKeepsBoundsInclusive() {
+        // salaries in USD: 50k, 60k, 100k, 100k, 140k -> range [50k, 100k] with 25k bands
+        List<AnalyticsRepository.BucketRow> rows =
+                analyticsRepository.salaryDistributionInRange(25000, 50000, 100000, null, null);
+
+        // [50k,75k): 50k, 60k -> 2 ; [75k,100k): none ; floor 100k = exactly on the max: 2 (folded by the service)
+        assertThat(rows).extracting(r -> r.getBucketFloorUsd().intValue()).containsExactly(50000, 100000);
+        assertThat(rows.getFirst().getEmployeeCount()).isEqualTo(2);
+        assertThat(rows.getLast().getEmployeeCount()).isEqualTo(2);
+    }
+
+    @Test
+    void rangeDistributionServiceFillsEmptyBandsAndFoldsTheMaximum() {
+        AnalyticsService service = new AnalyticsService(analyticsRepository,
+                payrollRunRepository, new com.acme.salary.config.AnalyticsProperties(50000));
+
+        var dist = service.salaryDistribution(null, null, 25000, 50000, 100000);
+
+        assertThat(dist.total()).isEqualTo(4);                 // 140k is outside the range
+        assertThat(dist.buckets()).hasSize(2);                 // contiguous: [50k,75k), [75k,100k]
+        assertThat(dist.buckets().get(0).count()).isEqualTo(2);
+        assertThat(dist.buckets().get(1).count()).isEqualTo(2); // the two 100k salaries folded into the last band
+        assertThat(dist.buckets().get(1).bucketCeilingUsd()).isEqualByComparingTo("100000");
+        // 40k-42k with no width asked -> 200-wide bands (2,000 / 10)
+        assertThat(AnalyticsService.defaultRangeBucket(2000)).isEqualTo(200);
+        assertThat(AnalyticsService.defaultRangeBucket(37000)).isEqualTo(2000);
     }
 
     private void currency(String code, String rate) {
