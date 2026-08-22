@@ -71,12 +71,12 @@ actor, bulkRaiseRunId, createdAt}` (append-only).
 
 | Method & path | Request | Response `data` |
 |---|---|---|
-| ✅ `POST /api/bulk-raises/preview` | `{raiseType: PERCENT\|AMOUNT, value, filterCountry?, filterDepartment?}` (no filters = whole org) | `{affectedCount, costImpact:[{currencyCode, current, proposed, delta}], costImpactUsdDelta, overThreshold:[{employeeId, employeeCode, name, totalRaisePercent, lastRaiseAt}]}` — `overThreshold` = cohort employees whose raises since their first recorded change total more than the guardrail threshold (OrgSettings), any time, newest-heaviest first; shown for optional exclusion |
-| ✅ `POST /api/bulk-raises` | preview request + `{excludedEmployeeIds:[]}` | **202** `BulkRaiseRun` (status QUEUED) — durable job, poll for progress |
+| ✅ `POST /api/bulk-raises/preview` | `{raiseType: PERCENT\|AMOUNT, value, filterCountry?, filterDepartment?, employeeIds?}` (no filters = whole org; `employeeIds` = exactly those people, filters ignored — one employee or a hand-picked list) | `{affectedCount, costImpact:[{currencyCode, current, proposed, delta}], costImpactUsdDelta, costImpactUsdCurrent, costImpactUsdProposed (current + delta), overThreshold:[{employeeId, employeeCode, name, totalRaisePercent, lastRaiseAt}]}` — `overThreshold` = cohort employees whose raises since their first recorded change total more than the guardrail threshold (OrgSettings), any time, newest-heaviest first; shown for optional exclusion |
+| ✅ `POST /api/bulk-raises` | preview request + `{excludedEmployeeIds:[]}` (`employeeIds` persisted on the run as `employee_ids` JSON so a resume targets the same cohort) | **202** `BulkRaiseRun` (status QUEUED) — durable job, poll for progress |
 | ✅ `GET /api/bulk-raises/{id}` | – | `BulkRaiseRun` (live counts while RUNNING) |
 | ✅ `GET /api/bulk-raises` | `?page&size` | offset page of `BulkRaiseRun` |
 
-`BulkRaiseRun` = `{id, raiseType, raiseValue, filterCountry, filterDepartment,
+`BulkRaiseRun` = `{id, raiseType, raiseValue, filterCountry, filterDepartment, selectedCount (hand-picked cohort size, 0 for filter runs),
 status: QUEUED|RUNNING|COMPLETED, appliedCount, reviewCount, excludedCount,
 initiatedBy, createdAt}`.
 Preview is a dry-run of the same code path. Execution is a durable background
@@ -162,7 +162,7 @@ rows stay collapsed.
 | ✅ `GET /api/analytics/by-country` | `?country&department` | `[{country, headcount, monthlySpendUsd}]` |
 | ✅ `GET /api/analytics/by-department` | `?country&department` | `[{department, headcount, avgAnnualUsd, medianAnnualUsd}]` |
 | ✅ `GET /api/analytics/pay-stats` | `?groupBy=country\|department&countries=India,Germany&department=` (all optional) | `[{label, headcount, minUsd, maxUsd, avgUsd, medianUsd}]` — one row per country (or department) within the selection; median via the portable window form |
-| ✅ `GET /api/analytics/salary-distribution` | `?country&department&bucketUsd` (5000\|10000\|20000\|50000, default 50000) — or a **custom range** `?minUsd&maxUsd[&bucketUsd]` (inclusive bounds; width free from 100 up to the range, ≤200 bands, default ≈10 nice-rounded bands) | `{bucketUsd, minUsd?, maxUsd?, total, buckets:[{bucketFloorUsd, bucketCeilingUsd, count}]}` — `total` = employees in range; custom-range bands are anchored at minUsd and contiguous (empty bands included) |
+| ✅ `GET /api/analytics/salary-distribution` | `?country&department&bucketUsd` (5000\|10000\|20000\|50000, default 50000) — or a **custom range** `?minUsd&maxUsd[&bucketUsd]` (inclusive bounds; min = max asks "who earns exactly X" → one band, bucketUsd 0; width free from 100 up to the range, ≤200 bands, default ≈10 nice-rounded bands) | `{bucketUsd, minUsd?, maxUsd?, total, buckets:[{bucketFloorUsd, bucketCeilingUsd, count}]}` — `total` = employees in range; custom-range bands are anchored at minUsd and contiguous (empty bands included) |
 
 All computed as SQL aggregates in the DB (never loading 10k rows), USD-normalized
 via current rates. Optional country/department filters slice every endpoint;

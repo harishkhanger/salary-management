@@ -985,16 +985,19 @@ a:hover {
 
 .donut-slice {
   cursor: pointer;
-  transition: opacity 0.15s ease, transform 0.15s ease;
-  transform-origin: 50% 50%;
+  shape-rendering: geometricPrecision;
+  transition: opacity 0.15s ease;
+  stroke: var(--surface);
+  stroke-width: 0.6;
+  stroke-linejoin: round;
 }
 
 .donut.has-hover .donut-slice:not(.active) {
-  opacity: 0.35;
+  opacity: 0.3;
 }
 
 .donut-slice.active {
-  transform: scale(1.04);
+  stroke-width: 0;
 }
 
 .donut-center {
@@ -1265,7 +1268,7 @@ a:hover {
   /* room for the first rotated band label (it swings left of its column)
      and for the hover tooltip above a full-height bar — without this the
      scroll container clips both */
-  padding: 26px 8px 0 20px;
+  padding: 26px 8px 0 54px;
   box-sizing: border-box;
 }
 
@@ -2083,4 +2086,85 @@ a:hover {
   .range-nums.head {
     display: none;
   }
+}
+
+/* ---------- directory selection + people picker ---------- */
+
+.selection-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  background: var(--accent-soft);
+  border: 1px solid #bfdbfe;
+  border-radius: var(--radius-sm);
+  font-size: 13.5px;
+  position: sticky;
+  top: 8px;
+  z-index: 2;
+}
+
+.table tr.row-picked td {
+  background: var(--accent-soft);
+}
+
+.table td input[type='checkbox'],
+.table th input[type='checkbox'] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  display: block;
+}
+
+.suggest {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-pop);
+  z-index: 5;
+}
+
+.suggest button {
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  border: 0;
+  background: none;
+  font: inherit;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.suggest button:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+
+.suggest button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.chip-x {
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 0 0 0 2px;
+}
+
+.chip-x:hover {
+  color: var(--danger);
 }

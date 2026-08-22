@@ -129,10 +129,18 @@ public class AnalyticsService {
         if (minUsd == null || maxUsd == null) {
             throw new ValidationException("Give both a minimum and a maximum salary for the range");
         }
-        if (minUsd < 0 || maxUsd <= minUsd) {
-            throw new ValidationException("The maximum salary must be greater than the minimum");
+        if (minUsd < 0 || maxUsd < minUsd) {
+            throw new ValidationException("The maximum salary must not be less than the minimum");
         }
         int range = maxUsd - minUsd;
+        if (range == 0) {
+            // "who earns exactly X?" — one band, bounds inclusive
+            long count = analyticsRepository.salaryDistributionInRange(1, minUsd, maxUsd,
+                            blankToNull(country), blankToNull(department)).stream()
+                    .mapToLong(AnalyticsRepository.BucketRow::getEmployeeCount).sum();
+            return new Distribution(0, minUsd, maxUsd, count,
+                    List.of(new SalaryBucket(BigDecimal.valueOf(minUsd), BigDecimal.valueOf(maxUsd), count)));
+        }
         int bucketUsd = requestedBucketUsd != null ? requestedBucketUsd : defaultRangeBucket(range);
         if (bucketUsd < MIN_RANGE_BUCKET_USD) {
             throw new ValidationException("Band width must be at least " + MIN_RANGE_BUCKET_USD);

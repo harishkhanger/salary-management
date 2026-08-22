@@ -43,8 +43,8 @@ export default function DashboardPage() {
   const rangeDraftError =
     rangeMin === '' || rangeMax === ''
       ? null
-      : Number(rangeMax) <= Number(rangeMin)
-        ? 'Maximum must be greater than minimum'
+      : Number(rangeMax) < Number(rangeMin)
+        ? 'Maximum must not be less than minimum'
         : rangeBand !== '' && Number(rangeBand) < 100
           ? 'Band width must be at least 100'
           : null
@@ -213,7 +213,9 @@ export default function DashboardPage() {
           <div>
             <h3 style={{ marginBottom: 4 }}>
               {range
-                ? `${distribution.total.toLocaleString()} employees earn between $${range.min.toLocaleString()} and $${range.max.toLocaleString()} a year`
+                ? range.min === range.max
+                  ? `${distribution.total.toLocaleString()} employees earn exactly $${range.min.toLocaleString()} a year`
+                  : `${distribution.total.toLocaleString()} employees earn between $${range.min.toLocaleString()} and $${range.max.toLocaleString()} a year`
                 : 'Salary distribution (annual USD)'}
               {range && (country || department) && (
                 <span className="muted" style={{ fontWeight: 400 }}>
@@ -224,7 +226,9 @@ export default function DashboardPage() {
             </h3>
             <p className="muted" style={{ marginTop: 0, fontSize: 12.5 }}>
               {range
-                ? `Bands of $${distribution.bucketUsd.toLocaleString()} — hover for the exact range`
+                ? distribution.bucketUsd > 0
+                  ? `Bands of $${distribution.bucketUsd.toLocaleString()} — hover for the exact range`
+                  : 'A single salary figure (USD-equivalent, at current rates)'
                 : 'Each column is one pay band — hover for the exact range'}
             </p>
           </div>
@@ -288,7 +292,7 @@ export default function DashboardPage() {
           </button>
           <button
             className="btn btn-sm"
-            disabled={rangeMin === '' || rangeMax === '' || Number(rangeMax) <= Number(rangeMin)}
+            disabled={rangeMin === '' || rangeMax === '' || Number(rangeMax) < Number(rangeMin)}
             title="One bar: just the count for the whole range"
             onClick={() => {
               const width = String(Number(rangeMax) - Number(rangeMin))
@@ -407,7 +411,7 @@ function Donut({
     const from = acc / total
     acc += d.value
     const to = acc / total
-    return { ...d, i, path: annularSector(from, to), pct: (d.value / total) * 100 }
+    return { ...d, i, from, to, pct: (d.value / total) * 100 }
   })
   const active = hovered === null ? null : slices[hovered]
   const [line1, line2] = centerLabel(total).split('\n')
@@ -419,13 +423,13 @@ function Donut({
           {slices.map((sl) => (
             <path
               key={sl.label}
-              d={sl.path}
+              // geometry never changes on hover — the ring stays one perfect circle; emphasis comes
+              // from the other slices dimming and the centre naming the hovered one
+              d={annularSector(sl.from, sl.to)}
               fill={PALETTE[sl.i % PALETTE.length]}
               className={`donut-slice${hovered === sl.i ? ' active' : ''}`}
               onMouseEnter={() => setHovered(sl.i)}
-            >
-              <title>{`${sl.label}: ${valueLabel(sl.value, sl.pct)}`}</title>
-            </path>
+            />
           ))}
         </svg>
         <div className="donut-center">
@@ -464,18 +468,22 @@ function Donut({
 /**
  * SVG path for the ring segment between two fractions of a turn (0..1),
  * clockwise from 12 o'clock, outer radius 50, inner radius 30 on a 100x100
- * box. A full circle is drawn as two halves — a single 360° arc collapses.
+ * box. `explode` shifts the whole segment outward along its bisector without
+ * changing its radii. A full circle is drawn as two halves — a single 360° arc collapses.
  */
-function annularSector(from: number, to: number): string {
+function annularSector(from: number, to: number, explode = 0): string {
   const R = 50
   const r = 30
-  const c = 50
+  const mid = ((from + to) / 2) * 2 * Math.PI - Math.PI / 2
+  const cx = 50 + explode * Math.cos(mid)
+  const cy = 50 + explode * Math.sin(mid)
   if (to - from >= 0.9999) {
+    const c = 50
     return `M${c} ${c - R} A${R} ${R} 0 1 1 ${c} ${c + R} A${R} ${R} 0 1 1 ${c} ${c - R} Z M${c} ${c - r} A${r} ${r} 0 1 0 ${c} ${c + r} A${r} ${r} 0 1 0 ${c} ${c - r} Z`
   }
   const point = (radius: number, t: number) => {
     const a = t * 2 * Math.PI - Math.PI / 2
-    return `${(c + radius * Math.cos(a)).toFixed(3)} ${(c + radius * Math.sin(a)).toFixed(3)}`
+    return `${(cx + radius * Math.cos(a)).toFixed(3)} ${(cy + radius * Math.sin(a)).toFixed(3)}`
   }
   const large = to - from > 0.5 ? 1 : 0
   return `M${point(R, from)} A${R} ${R} 0 ${large} 1 ${point(R, to)} L${point(r, to)} A${r} ${r} 0 ${large} 0 ${point(r, from)} Z`
@@ -491,6 +499,8 @@ const compactMoney = (v: number) =>
  * Narrow bands (custom ranges) get exact figures: "$40,000–40,500", never a rounded "$41k".
  */
 const bandLabel = (b: { bucketFloorUsd: number; bucketCeilingUsd: number }, bucketUsd: number) =>
-  bucketUsd < 5000
+  b.bucketFloorUsd === b.bucketCeilingUsd
+    ? `$${b.bucketFloorUsd.toLocaleString()}`
+    : bucketUsd < 5000
     ? `$${b.bucketFloorUsd.toLocaleString()}–${b.bucketCeilingUsd.toLocaleString()}`
     : `${compactUsd(b.bucketFloorUsd)}–${compactUsd(b.bucketCeilingUsd).slice(1)}`

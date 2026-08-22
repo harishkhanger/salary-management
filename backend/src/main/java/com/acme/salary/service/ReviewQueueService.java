@@ -42,7 +42,7 @@ public class ReviewQueueService {
         org.springframework.data.domain.PageRequest pageRequest =
                 org.springframework.data.domain.PageRequest.of(
                         paginationProperties.clampPage(page), paginationProperties.clampSize(size),
-                        org.springframework.data.domain.Sort.by("createdAt").ascending());
+                        org.springframework.data.domain.Sort.by("createdAt").descending()); // newest parked first
         org.springframework.data.domain.Page<RaiseReviewItem> items = status == null
                 ? raiseReviewItemRepository.findAll(pageRequest)
                 : raiseReviewItemRepository.findByStatus(status, pageRequest);
