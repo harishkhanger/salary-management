@@ -40,6 +40,9 @@ class AuditFeedDbContractTest {
     @Autowired
     private BulkRaiseRunRepository bulkRaiseRunRepository;
 
+    @Autowired
+    private com.acme.salary.repository.EmployeeRepository employeeRepository;
+
     private AuditService auditService;
 
     private static final LocalDateTime BASE = LocalDateTime.of(2026, 8, 1, 12, 0, 0);
@@ -47,7 +50,7 @@ class AuditFeedDbContractTest {
     @BeforeEach
     void setUp() {
         auditService = new AuditService(auditLogRepository, payrollRunRepository,
-                bulkRaiseRunRepository, new PaginationProperties(100), new ObjectMapper());
+                bulkRaiseRunRepository, employeeRepository, new PaginationProperties(100), new ObjectMapper());
         // 30 rows across 10 distinct timestamps -> 3 rows share each timestamp
         for (int i = 0; i < 30; i++) {
             auditLogRepository.save(AuditLog.builder()

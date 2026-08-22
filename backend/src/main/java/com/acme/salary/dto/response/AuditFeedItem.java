@@ -13,6 +13,8 @@ public record AuditFeedItem(
         Long id,
         String entityType,
         Long entityId,
+        /** Employee name for EMPLOYEE rows (deleted employees included) so the feed can speak in names. */
+        String entityName,
         String action,
         String actor,
         Object changedFields,

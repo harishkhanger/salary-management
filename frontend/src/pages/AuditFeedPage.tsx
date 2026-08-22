@@ -4,7 +4,7 @@ import { get } from '../api/client'
 import type { AuditFeedItem, Page } from '../api/types'
 import { useToast } from '../components/Toaster'
 import { Pagination, Spinner, formatDateTime } from '../components/ui'
-import { actionTagClass, describeAudit } from '../components/auditText'
+import { actionLabel, actionTagClass, auditSentence } from '../components/auditText'
 
 /**
  * Global audit feed: numbered pages like every other list; bulk runs appear
@@ -82,7 +82,7 @@ export default function AuditFeedPage() {
             <option value="">All actions</option>
             {ACTIONS.map((a) => (
               <option key={a} value={a}>
-                {a.replaceAll('_', ' ')}
+                {actionLabel(a)}
               </option>
             ))}
           </select>
@@ -161,9 +161,9 @@ function EntryRow({ item, compact }: { item: AuditFeedItem; compact?: boolean })
   return (
     <div className="feed-item">
       <span className="feed-when">{formatDateTime(item.createdAt)}</span>
-      <span className={`tag ${actionTagClass(item.action)}`}>{item.action.replaceAll('_', ' ')}</span>
+      <span className={`tag ${actionTagClass(item.action)}`}>{actionLabel(item.action)}</span>
       <span style={{ flex: 1 }}>
-        {describeAudit(item)}
+        {auditSentence(item)}
         {!compact && item.entityType === 'EMPLOYEE' && (
           <>
             {' '}
@@ -197,13 +197,10 @@ function RunRow({ item }: { item: AuditFeedItem }) {
   const summary = item.runSummary ?? {}
   const counts =
     runType === 'PAYROLL'
-      ? `${summary.processedCount ?? '?'} paid · ${summary.skippedHeldCount ?? 0} held · ${summary.alreadyProcessedCount ?? 0} already processed`
-      : `${summary.appliedCount ?? '?'} applied · ${summary.reviewCount ?? 0} parked · ${summary.excludedCount ?? 0} excluded`
+      ? `${summary.skippedHeldCount ?? 0} on hold`
+      : `${summary.excludedCount ?? 0} excluded`
 
-  const title =
-    runType === 'PAYROLL'
-      ? `Payroll run #${item.runId} — ${summary.month ?? '?'}/${summary.year ?? '?'}`
-      : `Bulk raise #${item.runId} — ${summary.raiseType === 'PERCENT' ? `+${summary.raiseValue}%` : `+${summary.raiseValue}`}`
+  const title = auditSentence(item)
 
   return (
     <div className="feed-run">

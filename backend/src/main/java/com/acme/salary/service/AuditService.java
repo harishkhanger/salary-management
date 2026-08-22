@@ -11,6 +11,7 @@ import com.acme.salary.enums.AuditEntityType;
 import com.acme.salary.exception.ValidationException;
 import com.acme.salary.repository.AuditLogRepository;
 import com.acme.salary.repository.BulkRaiseRunRepository;
+import com.acme.salary.repository.EmployeeRepository;
 import com.acme.salary.repository.PayrollRunRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -44,6 +45,7 @@ public class AuditService {
     private final AuditLogRepository auditLogRepository;
     private final PayrollRunRepository payrollRunRepository;
     private final BulkRaiseRunRepository bulkRaiseRunRepository;
+    private final EmployeeRepository employeeRepository;
     private final PaginationProperties paginationProperties;
     private final ObjectMapper objectMapper;
 
@@ -59,7 +61,8 @@ public class AuditService {
 
         Page<AuditLog> rows = auditLogRepository.findAll(spec, pageRequest);
         Map<Long, Map<String, Object>> runSummaries = loadRunSummaries(rows.getContent());
-        return PageResponse.from(rows, row -> toItem(row, runSummaries));
+        Map<Long, String> employeeNames = loadEmployeeNames(rows.getContent());
+        return PageResponse.from(rows, row -> toItem(row, runSummaries, employeeNames));
     }
 
     /**
@@ -161,6 +164,19 @@ public class AuditService {
         return summaries;
     }
 
+    /** Batch-load names for the page's EMPLOYEE rows — one query, deleted employees included. */
+    private Map<Long, String> loadEmployeeNames(List<AuditLog> page) {
+        List<Long> ids = page.stream()
+                .filter(row -> AuditEntityType.EMPLOYEE.name().equals(row.getEntityType()))
+                .map(AuditLog::getEntityId).distinct().toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, String> names = new LinkedHashMap<>();
+        employeeRepository.findAllById(ids).forEach(e -> names.put(e.getId(), e.getName()));
+        return names;
+    }
+
     private List<Long> headerIds(List<AuditLog> page, AuditEntityType type) {
         return page.stream()
                 .filter(row -> AuditAction.RUN_COMPLETED.name().equals(row.getAction())
@@ -174,7 +190,8 @@ public class AuditService {
         return type == AuditEntityType.PAYROLL_RUN ? runId : -runId;
     }
 
-    private AuditFeedItem toItem(AuditLog row, Map<Long, Map<String, Object>> runSummaries) {
+    private AuditFeedItem toItem(AuditLog row, Map<Long, Map<String, Object>> runSummaries,
+                                 Map<Long, String> employeeNames) {
         boolean isRunHeader = AuditAction.RUN_COMPLETED.name().equals(row.getAction());
         Map<String, Object> summary = null;
         if (isRunHeader) {
@@ -184,7 +201,8 @@ public class AuditService {
         Object changedFields = row.getChangedFields() == null ? null
                 : objectMapper.readValue(row.getChangedFields(), Map.class);
         return new AuditFeedItem(isRunHeader ? "RUN" : "ENTRY", row.getId(),
-                row.getEntityType(), row.getEntityId(), row.getAction(), row.getActor(),
+                row.getEntityType(), row.getEntityId(), employeeNames.get(row.getEntityId()),
+                row.getAction(), row.getActor(),
                 changedFields, row.getRefTable(), row.getRefId(), row.getRunId(),
                 summary, row.getCreatedAt());
     }
