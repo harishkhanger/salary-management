@@ -1,0 +1,33 @@
+# Production override — layered on top of docker-compose.yml:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Images are pulled from Docker Hub (built + pushed from a dev machine with buildx,
+# multi-arch), so the server never compiles anything. Secrets come from a .env file
+# next to this file (see .env.example); never committed.
+services:
+  mysql:
+    environment:
+      MYSQL_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?set DB_ROOT_PASSWORD in .env}
+    ports: !reset []            # never expose MySQL to the internet; only the backend reaches it
+    restart: unless-stopped
+    command: --innodb-buffer-pool-size=384M   # sized for a 2 GB host shared with the JVM
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-usalary", "-p${DB_PASSWORD}"]
+
+  backend:
+    image: harishkhanger/salary-management-backend:latest
+    build: !reset null
+    pull_policy: always
+    environment:
+      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      # cap the heap so MySQL + JVM + nginx coexist in 2 GB; the app idles well under this
+      JAVA_TOOL_OPTIONS: -Xmx640m -XX:MaxMetaspaceSize=160m -XX:+UseSerialGC
+    restart: unless-stopped
+
+  frontend:
+    image: harishkhanger/salary-management-frontend:latest
+    build: !reset null
+    pull_policy: always
+    ports: !override
+      - "80:80"
+    restart: unless-stopped
